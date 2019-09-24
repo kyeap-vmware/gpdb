@@ -21,6 +21,7 @@
 #include "utils/timestamp.h"
 
 #include "access/twophase.h"
+#include "access/distributed_restore_point.h"
 #include "cdb/cdbpublic.h"
 
 /*
@@ -215,6 +216,12 @@ xlog_desc(StringInfo buf, XLogReaderState *record)
 						 xlrec.ThisTimeLineID, xlrec.PrevTimeLineID,
 						 timestamptz_to_str(xlrec.end_time));
 	}
+	else if (info == XLOG_DISTRIBUTED_RESTORE_POINT)
+	{
+		xl_distributed_restore_point *xlrec = (xl_distributed_restore_point *) rec;
+		appendStringInfo(buf, "ltime %ld; dtime %ld; contentid %d",
+			xlrec->drp_ltime, xlrec->drp_dtime, xlrec->drp_contentid);
+	}
 }
 
 const char *
@@ -262,6 +269,9 @@ xlog_identify(uint8 info)
 			break;
 		case XLOG_FPI_FOR_HINT:
 			id = "FPI_FOR_HINT";
+			break;
+		case XLOG_DISTRIBUTED_RESTORE_POINT:
+			id = "DISTRIBUTED_RESTORE_POINT";
 			break;
 	}
 

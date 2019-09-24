@@ -17,7 +17,7 @@ OBJS = clog.o commit_ts.o multixact.o parallel.o rmgr.o slru.o subtrans.o \
 	xact.o xlog.o xlogarchive.o xlogfuncs.o \
 	xloginsert.o xlogreader.o xlogutils.o
 
-OBJS +=  distributedlog.o gp_transaction_log.o gp_distributed_log.o
+OBJS +=  distributedlog.o gp_transaction_log.o gp_distributed_log.o distributed_restore_point.o
 
 include $(top_srcdir)/src/backend/common.mk
 

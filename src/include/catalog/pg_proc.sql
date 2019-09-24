@@ -459,3 +459,7 @@ CREATE FUNCTION cdblegacyhash_cash(money) RETURNS int4 LANGUAGE internal IMMUTAB
 CREATE FUNCTION cdblegacyhash_complex(complex) RETURNS int4 LANGUAGE internal IMMUTABLE STRICT AS 'cdblegacyhash_complex' WITH (OID=6169, DESCRIPTION="Legacy cdbhash function");
 CREATE FUNCTION cdblegacyhash_uuid(uuid) RETURNS int4 LANGUAGE internal IMMUTABLE STRICT AS 'cdblegacyhash_uuid' WITH (OID=6170, DESCRIPTION="Legacy cdbhash function");
 CREATE FUNCTION cdblegacyhash_anyenum(anyenum) RETURNS int4 LANGUAGE internal IMMUTABLE STRICT AS 'cdblegacyhash_anyenum' WITH (OID=6171, DESCRIPTION="Legacy cdbhash function");
+
+-- function for distributed restore point
+CREATE FUNCTION create_distributed_restore_point() RETURNS int8 LANGUAGE internal IMMUTABLE STRICT AS 'create_distributed_restore_point' WITH (OID=6998, DESCRIPTION="Distributed restore point function");
+CREATE FUNCTION create_distributed_restore_point_on_segments(int8) RETURNS void LANGUAGE internal IMMUTABLE STRICT AS 'create_distributed_restore_point_on_segments' WITH (OID=6999, DESCRIPTION="Distributed restore point function on segments");
