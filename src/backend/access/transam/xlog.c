@@ -10130,6 +10130,10 @@ xlog_redo(XLogReaderState *record)
 		/* Keep track of full_page_writes */
 		lastFullPageWrites = fpw;
 	}
+	else if (info == XLOG_DISTRIBUTED_RESTORE_POINT)
+	{
+		/* nothing to do here */
+	}
 }
 
 #ifdef WAL_DEBUG
