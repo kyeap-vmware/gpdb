@@ -186,11 +186,16 @@ pg_create_restore_point(PG_FUNCTION_ARGS)
 	 */
 	if (IS_QUERY_DISPATCHER())
 	{
+		LWLockAcquire(TwophaseCommitLock, LW_EXCLUSIVE);
+
 		sprintf(command, "SELECT pg_catalog.pg_create_restore_point('%s')", restore_name_str);
 		CdbDispatchCommand(command, DF_NONE, &cdb_pgresults);
 	}
 
 	restorepoint = XLogRestorePoint(restore_name_str);
+
+	if (IS_QUERY_DISPATCHER())
+		LWLockRelease(TwophaseCommitLock);
 
 	/*
 	 * As a convenience, return the WAL location of the restore point record

@@ -2744,6 +2744,12 @@ CommitTransaction(void)
 	 */
 	s->state = TRANS_COMMIT;
 
+	if (s->executorDidWriteXLog && IS_QUERY_DISPATCHER()
+		&& getCurrentDtxState() != DTX_STATE_ONE_PHASE_COMMIT)
+	{
+		LWLockAcquire(TwophaseCommitLock, LW_SHARED);
+	}
+
 	if (!is_parallel_worker)
 	{
 		/*
@@ -2804,6 +2810,9 @@ CommitTransaction(void)
 		 */
 		ProcArrayEndTransaction(MyProc, latestXid, false);
 	}
+
+	if (LWLockHeldByMe(TwophaseCommitLock))
+		LWLockRelease(TwophaseCommitLock);
 
 	/*
 	 * This is all post-commit cleanup.  Note that if an error is raised here,
