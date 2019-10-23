@@ -23,9 +23,6 @@
 #include "access/xlogutils.h"
 #include "catalog/catalog.h"
 #include "catalog/pg_type.h"
-#include "cdb/cdbvars.h"
-#include "cdb/cdbdisp_query.h"
-#include "cdb/cdbdispatchresult.h"
 #include "funcapi.h"
 #include "miscadmin.h"
 #include "replication/walreceiver.h"
@@ -36,6 +33,10 @@
 #include "utils/pg_lsn.h"
 #include "utils/timestamp.h"
 #include "storage/fd.h"
+
+#include "cdb/cdbvars.h"
+#include "cdb/cdbdisp_query.h"
+#include "cdb/cdbdispatchresult.h"
 
 
 /*
@@ -153,8 +154,6 @@ pg_create_restore_point(PG_FUNCTION_ARGS)
 	text	   *restore_name = PG_GETARG_TEXT_P(0);
 	char	   *restore_name_str;
 	XLogRecPtr	restorepoint;
-	char command[MAXFNAMELEN + 100];
-	CdbPgResults cdb_pgresults = {NULL, 0};
 
 	if (!superuser())
 		ereport(ERROR,
@@ -180,22 +179,31 @@ pg_create_restore_point(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("value too long for restore point (maximum %d characters)", MAXFNAMELEN - 1)));
 
-	/*
-	 * Dispatch creation of restore point to segments
-	 * TODO: Commit blocking has to be introduced here prior the dispatch
-	 */
+	/* GPDB: QD should dispatch creation of restore point to all segments */
 	if (IS_QUERY_DISPATCHER())
 	{
+		char *restore_command;
+
+		restore_command = psprintf("SELECT pg_catalog.pg_create_restore_point('%s')",
+								   quote_identifier(restore_name_str));
+
+		/*
+		 * Acquire TwophaseCommitLock in EXCLUSIVE mode. This is to ensure
+		 * cluster-wide restore point consistency by preventing commits from
+		 * concurrent twophase transactions where a QE segment has written
+		 * WAL.
+		 */
 		LWLockAcquire(TwophaseCommitLock, LW_EXCLUSIVE);
 
-		sprintf(command, "SELECT pg_catalog.pg_create_restore_point('%s')", restore_name_str);
-		CdbDispatchCommand(command, DF_NONE, &cdb_pgresults);
-	}
+		CdbDispatchCommand(restore_command, DF_CANCEL_ON_ERROR, NULL);
+		restorepoint = XLogRestorePoint(restore_name_str);
 
-	restorepoint = XLogRestorePoint(restore_name_str);
-
-	if (IS_QUERY_DISPATCHER())
 		LWLockRelease(TwophaseCommitLock);
+
+		pfree(restore_command);
+	}
+	else
+		restorepoint = XLogRestorePoint(restore_name_str);
 
 	/*
 	 * As a convenience, return the WAL location of the restore point record
