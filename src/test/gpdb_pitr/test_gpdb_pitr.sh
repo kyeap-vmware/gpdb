@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 
 ## ==================================================================
-## Required: sourced gpdemo cluster with default mirror setup
+## Required: A fresh gpdemo cluster with mirrors sourced.
 ##
-## TODO: change to use pg_basebackup instead of the gpdemo mirrors
+## This script tests and showcases a very simple Point-In-Time
+## Recovery scenario by setting a restore point on all segments and
+## invoking them on the standby master and mirror segments.
+##
+## Warning: This test will expropriate the gpdemo cluster
+##          mirrors. Your gpdemo cluster will need to be recreated
+##          after this test is run.
 ## ==================================================================
 
 ## Run tests via pg_regress with given test name(s)
@@ -15,6 +21,7 @@ run_tests()
     fi
 }
 
+# Store standby master and mirror segment data directories.
 DATADIR="${MASTER_DATA_DIRECTORY%*/*/*}"
 STANDBY=${DATADIR}/standby
 MIRROR1=${DATADIR}/dbfast_mirror1/demoDataDir0
@@ -27,11 +34,8 @@ createdb gpdb_pitr_database
 # Run setup test.
 run_tests gpdb_pitr_setup
 
-# force kill cluster
-# gpstop -ai // TODO: why does MinRecoveryPoint mess up on standby master?
-pkill -9 post
-rm -rf /tmp/.s.PGSQL*
-sleep 2
+# Stop the cluster (send immediate shutdown to prevent CHECKPOINT).
+gpstop -ai
 
 # Update mirror recovery.confs to set restore point and unset primaryconninfo.
 for dir in $MIRROR1 $MIRROR2 $MIRROR3 $STANDBY; do
@@ -49,24 +53,13 @@ pg_ctl start -D $MIRROR2
 pg_ctl start -D $MIRROR3
 sleep 5s
 
-# Get rid of all rows in gp_segment_configuration to simulate new
-# cluster initialized from archives.
-PGOPTIONS="-c gp_session_role=utility" psql -p 7001 postgres -c "
-    set allow_system_table_mods=true;
-    truncate gp_segment_configuration;
-    "
-
-# Add standby and mirror segments back into gp_segment_configuration table.
-PGOPTIONS="-c gp_session_role=utility" psql -p 7001 postgres -c "
-    select pg_catalog.gp_add_segment(8::smallint, -1::smallint, 'p', 'p', 'n', 'u', 7001, '$(hostname)', '$(hostname)', '$STANDBY');
-    select pg_catalog.gp_add_segment(5::smallint, 0::smallint, 'p', 'p', 'n', 'u', 7002, '$(hostname)', '$(hostname)', '$MIRROR1');
-    select pg_catalog.gp_add_segment(6::smallint, 1::smallint, 'p', 'p', 'n', 'u', 7003, '$(hostname)', '$(hostname)', '$MIRROR2');
-    select pg_catalog.gp_add_segment(7::smallint, 2::smallint, 'p', 'p', 'n', 'u', 7004, '$(hostname)', '$(hostname)', '$MIRROR3');
-    "
-
 # Set environment to use new cluster.
 export PGPORT=7001
 export MASTER_DATA_DIRECTORY=$STANDBY
+
+# Reconfigure the segment configuration so that the replicas are
+# recognized as primary segments.
+PGOPTIONS="-c gp_session_role=utility" run_tests reconfigure_segment_config
 
 # Restart the cluster to get the MPP parts working.
 gpstop -air
