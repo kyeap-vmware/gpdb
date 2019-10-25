@@ -9,5 +9,5 @@ CREATE TABLE gpdb_restore_points(rpname text, rplsn pg_lsn);
 INSERT INTO gpdb_pitr_table SELECT generate_series(1, 10);
 
 -- Create restore point and do some DML that will not be recovered
-INSERT INTO gpdb_restore_points VALUES ('foo', pg_create_restore_point('foo'));
+INSERT INTO gpdb_restore_points VALUES ('foo', gp_create_restore_point('foo'));
 DELETE FROM gpdb_pitr_table;
