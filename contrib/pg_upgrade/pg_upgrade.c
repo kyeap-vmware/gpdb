@@ -215,16 +215,6 @@ main(int argc, char **argv)
 	if (!is_greenplum_dispatcher_mode())
 		update_segment_db_xids();
 
-	/*
-	 * In a segment, the data directory already contains all the objects,
-	 * because the segment is initialized by taking a physical copy of the
-	 * upgraded QD data directory. The auxiliary AO tables - containing
-	 * information about the segment files, are different in each server,
-	 * however. So we still need to restore those separately on each
-	 * server.
-	 */
-	restore_aosegment_tables();
-
 	if (is_greenplum_dispatcher_mode())
 	{
 		/* freeze master data *right before* stopping */
@@ -535,18 +525,30 @@ prepare_new_cluster(void)
 	}
 
 	/*
+	 * Normally, this is only run against the the databases that get initialized
+	 * with a new cluster (template0, template1, postgres). As part of our
+	 * current gpdb upgrade workflow, the coordinator's data directory is copied
+	 * to the segments as a means to sync oid's across the cluster. The side
+	 * effect of workflow means that the segments will already have the
+	 * database's we intended to restore also copied over. Skip this step
+	 * completely when restoring segments.
+	 */
+	if (is_greenplum_dispatcher_mode())
+	{
+	/*
 	 * We do freeze after analyze so pg_statistic is also frozen. template0 is
 	 * not frozen here, but data rows were frozen by initdb, and we set its
 	 * datfrozenxid, relfrozenxids, and relminmxid later to match the new xid
 	 * counter later.
 	 */
-	prep_status("Freezing all rows on the new cluster");
-	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-			  PG_OPTIONS_UTILITY_MODE
-			  "\"%s/vacuumdb\" %s --all --freeze %s",
-			  new_cluster.bindir, cluster_conn_opts(&new_cluster),
-			  log_opts.verbose ? "--verbose" : "");
-	check_ok();
+		prep_status("Freezing all rows on the new cluster");
+		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
+				  PG_OPTIONS_UTILITY_MODE
+				  "\"%s/vacuumdb\" %s --all --freeze %s",
+				  new_cluster.bindir, cluster_conn_opts(&new_cluster),
+				  log_opts.verbose ? "--verbose" : "");
+		check_ok();
+	}
 
 	get_pg_database_relfilenode(&new_cluster);
 }
