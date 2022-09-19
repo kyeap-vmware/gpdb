@@ -128,12 +128,15 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		 *
 		 * XXX GPDB: for TOAST tables, don't insist on a match at all
 		 * yet; there are other ways for us to get mismatched names. Ideally
-		 * this will go away eventually.
+		 * this will go away eventually. This is also true for pg_aoseg tables
 		 */
-		if (strcmp(old_rel->nspname, new_rel->nspname) != 0 ||
-			(strcmp(old_rel->relname, new_rel->relname) != 0 &&
-			 (/* GET_MAJOR_VERSION(old_cluster.major_version) >= 900 || */
-			  strcmp(old_rel->nspname, "pg_toast") != 0)))
+
+		/*
+		 * If namespace is not pg_toast and pg_aoseg, check for mismatch
+		 * namespace, then check for mismatch relname
+		 */
+		if (((strcmp(old_rel->nspname, "pg_toast") != 0) && (strcmp(old_rel->nspname, "pg_aoseg") != 0)) &&
+				((strcmp(old_rel->nspname, new_rel->nspname) != 0) || strcmp(old_rel->relname, new_rel->relname) != 0))
 		{
 			pg_log(PG_WARNING, "Relation names for OID %u in database \"%s\" do not match: "
 				   "old name \"%s.%s\", new name \"%s.%s\"\n",
