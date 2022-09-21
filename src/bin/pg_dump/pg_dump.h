@@ -63,6 +63,9 @@ typedef struct SimpleOidList
 } SimpleOidList;
 
 
+#define GPDB5_PGVERSION 80323
+#define GPDB6_PGVERSION 90426
+
 /*
  * The data structures used to store system catalog information.  Every
  * dumpable object is a subclass of DumpableObject.
