@@ -183,7 +183,8 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	 * While not a check option, we do this now because this is the only time
 	 * the old server is running.
 	 */
-	if (!user_opts.check && is_greenplum_dispatcher_mode())
+	/* if (!user_opts.check && is_greenplum_dispatcher_mode()) */
+	if (!user_opts.check)
 		generate_old_dump();
 
 	if (!live_check)

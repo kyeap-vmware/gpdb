@@ -180,46 +180,13 @@ main(int argc, char **argv)
 	/* -- NEW -- */
 	start_postmaster(&new_cluster, true);
 
-	if (is_greenplum_dispatcher_mode())
-	{
-		prepare_new_databases();
+	prepare_new_databases();
 
-		create_new_objects();
-	}
-	else
-	{
-		/*
-		 * Restore scripts contains statements to update relfrozenxid and relminxmid
-		 * for the relations according to the master, and the same data is copied to the
-		 * segments but on segments those should reflect the values from the corresponding
-		 * segment database. So, update the xids on the segments for user and catalog tables.
-		 * If this step is not done on segment, subsequent vacuum freeze can complain that
-		 * the xmin <some low number> from before relfrozenxid <some higher number>
-		 */
-		set_frozenxids(false);
-	}
+	create_new_objects();
 
 	invalidate_indexes();
 
-	/*
-	 * Since freeze_master_data() was executed on the copied master, the xmin of
-	 * the tuples (yet to be copied/linked) for the user created tables can be
-	 * lower than the relfrozenxid updated with vacuum freeze.
-	 * So, it's safe / better to update the relfrozenxid, relminmxid for the
-	 * relations using datfrozenxid which is the lowest available relfrozenxid
-	 * for all the relation in the source database and datminmxid which is the minimum
-	 * of relminmxid for all the relations in source database. This ensures that the
-	 * xmin of the tuples will not be higher than relfrozenxid for the relation.
-	 * Otherwise, vacuuming those tables once data is copied/linked will error out.
-	 */
-	if (!is_greenplum_dispatcher_mode())
-		update_segment_db_xids();
-
-	if (is_greenplum_dispatcher_mode())
-	{
-		/* freeze master data *right before* stopping */
-		freeze_master_data();
-	}
+	// This is where ao tables were previously restored.
 
 	stop_postmaster(false);
 
@@ -247,10 +214,6 @@ main(int argc, char **argv)
 			  new_cluster.bindir, old_cluster.controldata.chkpnt_nxtoid,
 			  new_cluster.pgdata);
 	check_ok();
-
-	/* For non-master segments, uniquify the system identifier. */
-	if (!is_greenplum_dispatcher_mode())
-		reset_system_identifier();
 
 	prep_status("Sync data directory to disk");
 	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
@@ -526,29 +489,29 @@ prepare_new_cluster(void)
 
 	/*
 	 * Normally, this is only run against the the databases that get initialized
-	 * with a new cluster (template0, template1, postgres). As part of our
+	 * with a new cluster (template1, postgres). As part of our
 	 * current gpdb upgrade workflow, the coordinator's data directory is copied
 	 * to the segments as a means to sync oid's across the cluster. The side
 	 * effect of workflow means that the segments will already have the
 	 * database's we intended to restore also copied over. Skip this step
 	 * completely when restoring segments.
 	 */
-	if (is_greenplum_dispatcher_mode())
-	{
+	/* if (is_greenplum_dispatcher_mode()) */
+	/* { */
 	/*
 	 * We do freeze after analyze so pg_statistic is also frozen. template0 is
 	 * not frozen here, but data rows were frozen by initdb, and we set its
 	 * datfrozenxid, relfrozenxids, and relminmxid later to match the new xid
 	 * counter later.
 	 */
-		prep_status("Freezing all rows on the new cluster");
-		exec_prog(UTILITY_LOG_FILE, NULL, true, true,
-				  PG_OPTIONS_UTILITY_MODE
-				  "\"%s/vacuumdb\" %s --all --freeze %s",
-				  new_cluster.bindir, cluster_conn_opts(&new_cluster),
-				  log_opts.verbose ? "--verbose" : "");
-		check_ok();
-	}
+	prep_status("Freezing all rows on the new cluster");
+	exec_prog(UTILITY_LOG_FILE, NULL, true, true,
+			PG_OPTIONS_UTILITY_MODE
+			"\"%s/vacuumdb\" %s --all --freeze %s",
+			new_cluster.bindir, cluster_conn_opts(&new_cluster),
+			log_opts.verbose ? "--verbose" : "");
+	check_ok();
+	/* } */
 
 	get_pg_database_relfilenode(&new_cluster);
 }
@@ -930,7 +893,7 @@ set_frozenxids(bool minmxid_only)
 			 */
 									  "WHERE	(relkind IN ('r', 'm', 't') "
 									  "AND NOT relfrozenxid = 0) "
-									  "OR (relkind IN ('t', 'o', 'b', 'M'))",
+									  "OR (relkind IN ('t'))",
 									  old_cluster.controldata.chkpnt_nxtxid));
 
 		/* set pg_class.relminmxid */
