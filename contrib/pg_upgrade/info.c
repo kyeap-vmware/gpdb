@@ -524,7 +524,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "  OR (n.nspname = 'pg_catalog' AND "
 	"    relname IN ('pg_largeobject', 'pg_largeobject_loid_pn_index'%s) ));",
 	/* Greenplum 5X use 'm' as aovisimap which is now matview in 6X and above. */
-			 (GET_MAJOR_VERSION(old_cluster.major_version) == 803) ?
+			 (GET_MAJOR_VERSION(cluster->major_version) == 803) ?
 			 ", 'm'" : ", 'M'",
 	/* see the comment at the top of old_8_3_create_sequence_script() */
 			 (GET_MAJOR_VERSION(old_cluster.major_version) == 803) ?
