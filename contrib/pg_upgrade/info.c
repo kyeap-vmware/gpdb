@@ -150,7 +150,7 @@ gen_db_file_maps(DbInfo *old_db, DbInfo *new_db,
 		 * External tables have relfilenodes but no physical files, and aoseg
 		 * tables are handled by their AO table
 		 */
-		if (old_rel->relstorage == 'x' || strcmp(new_rel->nspname, "pg_aoseg") == 0)
+		if (old_rel->relstorage == 'x')
 		{
 			old_relnum++;
 			new_relnum++;
@@ -515,7 +515,7 @@ get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 			 "    n.nspname !~ '^pg_toast_temp_' AND "
 	/* skip pg_toast because toast index have relkind == 'i', not 't' */
 			 "    n.nspname NOT IN ('pg_catalog', 'information_schema', "
-			 "						'binary_upgrade', 'pg_toast', 'pg_aoseg') AND "
+			 "						'binary_upgrade', 'pg_toast') AND "
 			 "    n.nspname NOT IN ('gp_toolkit', 'pg_bitmapindex') AND "
 			 "	  c.oid >= %u) "
 			 "  OR (n.nspname = 'pg_catalog' AND "
