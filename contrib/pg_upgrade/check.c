@@ -646,10 +646,6 @@ create_script_for_cluster_analyze(char **analyze_script_file_name)
 
 	fprintf(script, "\"%s/vacuumdb\" %s--all --analyze-in-stages\n",
 			new_cluster.bindir, user_specification.data);
-	/* Did we copy the free space files? */
-	if (GET_MAJOR_VERSION(old_cluster.major_version) < 804)
-		fprintf(script, "\"%s/vacuumdb\" %s--all\n", new_cluster.bindir,
-				user_specification.data);
 
 	fprintf(script, "echo%s\n\n", ECHO_BLANK);
 	fprintf(script, "echo %sDone%s\n",
