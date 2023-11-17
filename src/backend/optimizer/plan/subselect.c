@@ -90,6 +90,7 @@ static Node *remove_useless_EXISTS_sublink(PlannerInfo *root,
 						Query *subselect, bool under_not);
 
 extern	double global_work_mem(PlannerInfo *root);
+static bool contain_outer_selfref_walker(Node *node, Index *depth);
 
 /*
  * Select a PARAM_EXEC number to identify the given Var as a parameter for
@@ -492,6 +493,7 @@ CorrelatedVarWalker(Node *node, CorrelatedVarWalkerContext *ctx)
 
 	return expression_tree_walker(node, CorrelatedVarWalker, ctx);
 }
+
 
 /**
  * Returns true if subquery is correlated
@@ -1381,6 +1383,58 @@ SS_process_ctes(PlannerInfo *root)
 	}
 }
 #endif
+
+bool
+contain_outer_selfref(Node *node)
+{
+	Index		depth = 0;
+
+	/*
+	 * We should be starting with a Query, so that depth will be 1 while
+	 * examining its immediate contents.
+	 */
+	Assert(IsA(node, Query));
+
+	return contain_outer_selfref_walker(node, &depth);
+}
+
+static bool
+contain_outer_selfref_walker(Node *node, Index *depth)
+{
+	if (node == NULL)
+		return false;
+	if (IsA(node, RangeTblEntry))
+	{
+		RangeTblEntry *rte = (RangeTblEntry *) node;
+
+		/*
+		 * Check for a self-reference to a CTE that's above the Query that our
+		 * search started at.
+		 */
+		if (rte->rtekind == RTE_CTE &&
+			rte->self_reference &&
+			rte->ctelevelsup >= *depth)
+			return true;
+		return false;			/* allow range_table_walker to continue */
+	}
+	if (IsA(node, Query))
+	{
+		/* Recurse into subquery, tracking nesting depth properly */
+		Query	   *query = (Query *) node;
+		bool		result;
+
+		(*depth)++;
+
+		result = query_tree_walker(query, contain_outer_selfref_walker,
+								   (void *) depth, QTW_EXAMINE_RTES);
+
+		(*depth)--;
+
+		return result;
+	}
+	return expression_tree_walker(node, contain_outer_selfref_walker,
+								  (void *) depth);
+}
 
 /*
  * convert_ANY_sublink_to_join: try to convert an ANY SubLink to a join

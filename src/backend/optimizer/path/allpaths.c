@@ -36,6 +36,7 @@
 #include "optimizer/planner.h"
 #include "optimizer/prep.h"
 #include "optimizer/restrictinfo.h"
+#include "optimizer/subselect.h"
 #include "optimizer/var.h"
 #include "optimizer/planshare.h"
 #include "parser/parse_clause.h"
@@ -2031,7 +2032,7 @@ set_cte_pathlist(PlannerInfo *root, RelOptInfo *rel, RangeTblEntry *rte)
 	 * qual expressions between multiple references, but
 	 * so far we don't support it.
 	 */
-	if (!root->config->gp_cte_sharing || cte->cterefcount == 1)
+	if (!(root->config->gp_cte_sharing && cte->cterefcount > 1 && contain_outer_selfref(cte->ctequery)))
 	{
 		PlannerConfig *config = CopyPlannerConfig(root->config);
 
