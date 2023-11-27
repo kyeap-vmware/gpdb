@@ -124,6 +124,8 @@ isolation_start_test(const char *testname,
 			 infile,
 			 outfile);
 
+	fprintf(stdout, _("psql test command %s\n"),
+				psql_cmd);
 	pid = spawn_process(psql_cmd);
 
 	if (pid == INVALID_PID)

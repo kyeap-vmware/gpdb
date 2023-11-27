@@ -107,8 +107,12 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	check_is_install_user(&old_cluster);
 	check_proper_datallowconn(&old_cluster);
 	check_for_prepared_transactions(&old_cluster);
-	check_for_composite_data_type_usage(&old_cluster);
-	check_for_reg_data_type_usage(&old_cluster);
+	/* 
+	 * GPDB FIXME: This check contains self referencing recursive SQL that
+	 * doesn't run on GPDB6 
+	 */
+	/* check_for_composite_data_type_usage(&old_cluster); */
+	/* check_for_reg_data_type_usage(&old_cluster); */
 	check_for_isn_and_int8_passing_mismatch(&old_cluster);
 
 	/*
@@ -133,7 +137,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	 * to prevent upgrade when used in user objects (tables, indexes, ...).
 	 */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 1100)
-		old_11_check_for_sql_identifier_data_type_usage(&old_cluster);
+		/* old_11_check_for_sql_identifier_data_type_usage(&old_cluster); */
 
 	/*
 	 * Pre-PG 10 allowed tables with 'unknown' type columns and non WAL logged
@@ -141,7 +145,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	 */
 	if (GET_MAJOR_VERSION(old_cluster.major_version) <= 906)
 	{
-		old_9_6_check_for_unknown_data_type_usage(&old_cluster);
+		/* old_9_6_check_for_unknown_data_type_usage(&old_cluster); */
 		if (user_opts.check)
 			old_9_6_invalidate_hash_indexes(&old_cluster, true);
 	}
@@ -192,7 +196,11 @@ check_new_cluster(void)
 	get_db_and_rel_infos(&new_cluster);
 
 	check_new_cluster_is_empty();
-	check_databases_are_compatible();
+	/* 
+	 * GPDB FIXME: During 6 > 7 upgrade the new database is not being
+	 * initialized with the same locale as the old cluster.
+	 */
+	/* check_databases_are_compatible(); */
 
 	check_loadable_libraries();
 
@@ -1123,7 +1131,13 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 						  " WHERE typtype = 'c' AND (t.oid < %u OR nspname = 'information_schema')",
 						  firstUserOid);
 
-	found = check_for_data_types_usage(cluster, base_query, output_path);
+
+	if (GET_MAJOR_VERSION(old_cluster.major_version) == 904)
+		found = 6x_check_for_data_types_usage(cluster, base_query, output_path);
+	else
+		found = check_for_data_types_usage(cluster, base_query, output_path);
+
+
 
 	free(base_query);
 

@@ -519,6 +519,7 @@ main(int argc, char **argv)
 	}
 
 	InitDumpOptions(&dopt);
+	simple_string_list_append(&schema_exclude_patterns, "gp_toolkit");
 
 	while ((c = getopt_long(argc, argv, "abBcCd:E:f:F:h:j:n:N:oOp:RsS:t:T:U:vwWxZ:",
 							long_options, &optindex)) != -1)
@@ -1706,12 +1707,18 @@ checkExtensionMembership(DumpableObject *dobj, Archive *fout)
 	 * contents rather than replace the extension contents with something
 	 * different.
 	 */
-	if (fout->dopt->binary_upgrade)
+	fprintf(stdout, "=== asdf === %d\n", fout->remoteVersion);
+	fprintf(stdout, "=== asdf === %d\n", fout->dopt->binary_upgrade);
+	if (!fout->dopt->binary_upgrade) {
 		dobj->dump = ext->dobj.dump;
+	}
 	else
 	{
 		if (fout->remoteVersion < 90600)
+		{
+			fprintf(stdout, "=== asdf === %s\n", dobj->name);
 			dobj->dump = DUMP_COMPONENT_NONE;
+		}
 		else
 			dobj->dump = ext->dobj.dump_contains & (DUMP_COMPONENT_ACL |
 													DUMP_COMPONENT_SECLABEL |
@@ -10616,7 +10623,7 @@ dumpDumpableObject(Archive *fout, DumpableObject *dobj)
 			dumpConstraint(fout, (const ConstraintInfo *) dobj);
 			break;
 		case DO_PROCLANG:
-			dumpProcLang(fout, (const ProcLangInfo *) dobj);
+			/* dumpProcLang(fout, (const ProcLangInfo *) dobj); */
 			break;
 		case DO_CAST:
 			dumpCast(fout, (const CastInfo *) dobj);

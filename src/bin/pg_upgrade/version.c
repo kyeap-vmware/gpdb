@@ -231,6 +231,159 @@ check_for_data_types_usage(ClusterInfo *cluster,
 }
 
 /*
+ * 6x_check_for_data_types_usage()
+ *	Detect whether there are any stored columns depending on given type(s)
+ *
+ * If so, write a report to the given file name, and return true.
+ *
+ * base_query should be a SELECT yielding a single column named "oid",
+ * containing the pg_type OIDs of one or more types that are known to have
+ * inconsistent on-disk representations across server versions.
+ *
+ * We check for the type(s) in tables, matviews, and indexes, but not views;
+ * there's no storage involved in a view.
+ */
+bool
+6x_check_for_data_types_usage(ClusterInfo *cluster,
+						   const char *base_query,
+						   const char *output_path)
+{
+	bool		found = false;
+	FILE	   *script = NULL;
+	int			dbnum;
+
+	for (dbnum = 0; dbnum < cluster->dbarr.ndbs; dbnum++)
+	{
+		DbInfo	   *active_db = &cluster->dbarr.dbs[dbnum];
+		PGconn	   *conn = connectToServer(cluster, active_db->db_name);
+		PQExpBufferData querybuf;
+		PGresult   *res;
+		bool		db_used = false;
+		int			ntups;
+		int			rowno;
+		int			i_nspname,
+					i_relname,
+					i_attname;
+
+		/*
+		 * The type(s) of interest might be wrapped in a domain, array,
+		 * composite, or range, and these container types can be nested (to
+		 * varying extents depending on server version, but that's not of
+		 * concern here).  To handle all these cases we need a recursive CTE.
+		 */
+		PGresult   *res;
+		initPQExpBuffer(&querybuf);
+		appendPQExpBuffer(&querybuf, base_query);
+		res = executeQueryOrDie(conn, "%s", querybuf.data);
+
+		
+
+		PGresult *temp_res;
+		temp_res = res
+		while loop {
+			appendPQExpBuffer(&querybuf, 
+							  "WITH x AS (SELECT unnest(ARRAY[%s]) AS oid) "
+							  "SELECT ARRAY_AGG(t.oid) AS result_array "
+							  "FROM ( "
+							  "    SELECT t.oid "
+							  "    FROM pg_catalog.pg_type t, x "
+							  "    WHERE typbasetype = x.oid AND typtype = 'd' "
+							  "    UNION ALL "
+							  "    SELECT t.oid "
+							  "    FROM pg_catalog.pg_type t, x "
+							  "    WHERE typelem = x.oid AND typtype = 'b' "
+							  "    UNION ALL "
+							  "    SELECT t.oid "
+							  "    FROM pg_catalog.pg_type t, pg_catalog.pg_class c, pg_catalog.pg_attribute a, x "
+							  "    WHERE t.typtype = 'c' "
+							  "        AND t.oid = c.reltype "
+							  "        AND c.oid = a.attrelid "
+							  "        AND NOT a.attisdropped "
+							  "        AND a.atttypid = x.oid "
+							  "    UNION ALL "
+							  "    SELECT t.oid "
+							  "    FROM pg_catalog.pg_type t, pg_catalog.pg_range r, x "
+							  "    WHERE t.typtype = 'r' "
+							  "        AND r.rngtypid = t.oid "
+							  "        AND r.rngsubtype = x.oid "
+							  ") AS t; ",
+							  getIntsString(res));
+			temp_res = executeQueryOrDie(conn, "%s", querybuf.data);
+
+			if temp_res is empty
+				 break;
+
+			append temp_res to res
+		}
+
+		ntups = PQntuples(res);
+		i_nspname = PQfnumber(res, "nspname");
+		i_relname = PQfnumber(res, "relname");
+		i_attname = PQfnumber(res, "attname");
+		for (rowno = 0; rowno < ntups; rowno++)
+		{
+			found = true;
+			if (script == NULL && (script = fopen_priv(output_path, "w")) == NULL)
+				pg_fatal("could not open file \"%s\": %s\n", output_path,
+						 strerror(errno));
+			if (!db_used)
+			{
+				fprintf(script, "In database: %s\n", active_db->db_name);
+				db_used = true;
+			}
+			fprintf(script, "  %s.%s.%s\n",
+					PQgetvalue(res, rowno, i_nspname),
+					PQgetvalue(res, rowno, i_relname),
+					PQgetvalue(res, rowno, i_attname));
+		}
+
+		PQclear(res);
+
+		termPQExpBuffer(&querybuf);
+
+		PQfinish(conn);
+	}
+
+	if (script)
+		fclose(script);
+
+	return found;
+}
+
+// convert a list of oids like to string like 1,2,3
+char* getIntsString(PGresult *res) {
+    int numRows = PQntuples(res);
+
+    if (numRows > 0) {
+        // Calculate the total length needed for the string, including commas and null terminator
+        int totalLength = numRows - 1; // for commas
+        for (int i = 0; i < numRows; i++) {
+            totalLength += snprintf(NULL, 0, "%d", atoi(PQgetvalue(res, i, 0)));
+        }
+
+        // Allocate memory for the string
+        char *intsString = malloc(totalLength + 1); // +1 for the null terminator
+
+        // Build the comma-separated string
+        intsString[0] = '\0'; // Initialize to an empty string
+        for (int i = 0; i < numRows; i++) {
+            char temp[12]; // Assuming a maximum of 12 characters for each integer
+            sprintf(temp, "%d", atoi(PQgetvalue(res, i, 0)));
+
+            strcat(intsString, temp);
+
+            if (i < numRows - 1) {
+                strcat(intsString, ",");
+            }
+        }
+
+        return intsString;
+    } else {
+        return NULL;
+    }
+}
+
+/*
  * check_for_data_type_usage()
  *	Detect whether there are any stored columns depending on the given type
  *

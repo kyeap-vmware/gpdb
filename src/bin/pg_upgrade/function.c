@@ -230,6 +230,14 @@ check_loadable_libraries(void)
 				llen = strlen(lib);
 			}
 
+			/* GPDB: Do not look for plpython2 when upgrading from 6 > 7. */
+			if (GET_MAJOR_VERSION(old_cluster.major_version) <= 90400 &&
+				strcmp(lib, "$libdir/plpython2") == 0)
+			{
+				lib = "$libdir/plpython3";
+				llen = strlen(lib);
+			}
+
 			strcpy(cmd, "LOAD '");
 			PQescapeStringConn(conn, cmd + strlen(cmd), lib, llen, NULL);
 			strcat(cmd, "'");
