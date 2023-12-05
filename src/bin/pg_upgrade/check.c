@@ -111,7 +111,7 @@ check_and_dump_old_cluster(bool live_check, char **sequence_script_file_name)
 	 * GPDB FIXME: This check contains self referencing recursive SQL that
 	 * doesn't run on GPDB6 
 	 */
-	/* check_for_composite_data_type_usage(&old_cluster); */
+	check_for_composite_data_type_usage(&old_cluster);
 	/* check_for_reg_data_type_usage(&old_cluster); */
 	check_for_isn_and_int8_passing_mismatch(&old_cluster);
 
@@ -1132,10 +1132,7 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 						  firstUserOid);
 
 
-	if (GET_MAJOR_VERSION(old_cluster.major_version) == 904)
-		found = 6x_check_for_data_types_usage(cluster, base_query, output_path);
-	else
-		found = check_for_data_types_usage(cluster, base_query, output_path);
+	found = check_for_data_types_usage(cluster, base_query, output_path);
 
 
 
