@@ -182,7 +182,7 @@ dump_old_cluster:
 	 * While not a check option, we do this now because this is the only time
 	 * the old server is running.
 	 */
-	if (!user_opts.check && is_greenplum_dispatcher_mode())
+	if ((!user_opts.check || !not_in_place_upgrade()) && is_greenplum_dispatcher_mode())
 		generate_old_dump();
 
 	if (!live_check)
@@ -223,7 +223,7 @@ check_new_cluster(void)
 void
 report_clusters_compatible(void)
 {
-	if (user_opts.check)
+	if (user_opts.check || not_in_place_upgrade())
 	{
 		if (get_check_fatal_occurred())
 		{
@@ -486,6 +486,9 @@ check_new_cluster_is_empty(void)
 static void
 check_databases_are_compatible(void)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int			newdbnum;
 	int			olddbnum;
 	DbInfo	   *newdbinfo;
@@ -603,6 +606,9 @@ create_script_for_cluster_analyze(char **analyze_script_file_name)
 static void
 check_for_new_tablespace_dir(ClusterInfo *new_cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int		tblnum;
 	char	new_tablespace_dir[MAXPGPATH];
 
@@ -755,6 +761,9 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 static void
 check_is_install_user(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	PGresult   *res;
 	PGconn	   *conn = connectToServer(cluster, "template1");
 
@@ -821,6 +830,9 @@ check_is_install_user(ClusterInfo *cluster)
 static void
 check_proper_datallowconn(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int			dbnum;
 	PGconn	   *conn_template1;
 	PGresult   *dbres;
@@ -911,6 +923,9 @@ check_proper_datallowconn(ClusterInfo *cluster)
 static void
 check_for_prepared_transactions(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	PGresult   *res;
 	PGconn	   *conn = connectToServer(cluster, "template1");
 
@@ -946,6 +961,9 @@ check_for_prepared_transactions(ClusterInfo *cluster)
 static void
 check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int			dbnum;
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -1119,6 +1137,9 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 static void
 check_for_composite_data_type_usage(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	bool		found;
 	Oid			firstUserOid;
 	char		output_path[MAXPGPATH];
@@ -1180,6 +1201,9 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 static void
 check_for_reg_data_type_usage(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	bool		found;
 	char		output_path[MAXPGPATH];
 
@@ -1273,6 +1297,9 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 static void
 check_for_jsonb_9_4_usage(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for incompatible \"jsonb\" data type");
@@ -1381,6 +1408,9 @@ get_canonical_locale_name(int category, const char *locale)
 static void
 check_for_appendonly_materialized_view_with_relfrozenxid(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	FILE		*script = NULL;
 	char		output_path[MAXPGPATH];
 	bool		found = false;

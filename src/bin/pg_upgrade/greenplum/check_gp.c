@@ -62,6 +62,9 @@ check_greenplum(void)
 static void
 check_online_expansion(void)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	bool		expansion = false;
 	int			dbnum;
 
@@ -132,6 +135,9 @@ check_online_expansion(void)
 static void
 check_external_partition(void)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	char		output_path[MAXPGPATH];
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -253,6 +259,9 @@ check_external_partition(void)
 static void
 check_covering_aoindex(void)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	char			output_path[MAXPGPATH];
 	FILE		   *script = NULL;
 	bool			found = false;
@@ -397,6 +406,9 @@ check_orphaned_toastrels(void)
 static void
 check_partition_indexes(void)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int				dbnum;
 	FILE		   *script = NULL;
 	bool			found = false;
@@ -496,6 +508,9 @@ check_partition_indexes(void)
 static void
 check_for_array_of_partition_table_types(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	const char *const SEPARATOR = "\n";
 	int			dbnum;
 	char	   *dependee_partition_report = palloc0(1);
@@ -646,7 +661,6 @@ check_multi_column_list_partition_keys(ClusterInfo *cluster)
 static void
 check_for_plpython2_dependent_functions(ClusterInfo *cluster)
 {
-
 	FILE		*script = NULL;
 	char		output_path[MAXPGPATH];
 	bool		found = false;

@@ -10,6 +10,7 @@
 #include "postgres_fe.h"
 
 #include "pg_upgrade.h"
+#include "greenplum/pg_upgrade_greenplum.h"
 
 #include "catalog/pg_class_d.h"
 #include "fe_utils/string_utils.h"
@@ -235,6 +236,9 @@ old_9_6_check_for_unknown_data_type_usage(ClusterInfo *cluster)
 void
 old_9_6_invalidate_hash_indexes(ClusterInfo *cluster, bool check_mode)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	int			dbnum;
 	FILE	   *script = NULL;
 	bool		found = false;
@@ -350,6 +354,9 @@ old_9_6_invalidate_hash_indexes(ClusterInfo *cluster, bool check_mode)
 void
 old_11_check_for_sql_identifier_data_type_usage(ClusterInfo *cluster)
 {
+	if (not_in_place_upgrade())
+		return;
+
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for invalid \"sql_identifier\" user columns");

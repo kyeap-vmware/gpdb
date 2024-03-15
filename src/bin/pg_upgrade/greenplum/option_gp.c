@@ -15,6 +15,7 @@ typedef struct {
 	bool skip_target_check;
 	bool skip_checks;
 	char *output_dir;
+	bool not_in_place_upgrade;
 } GreenplumUserOpts;
 
 static GreenplumUserOpts greenplum_user_opts;
@@ -28,6 +29,7 @@ initialize_greenplum_user_options(void)
 	greenplum_user_opts.skip_target_check = false;
 	greenplum_user_opts.skip_checks = false;
 	greenplum_user_opts.output_dir = NULL;
+	greenplum_user_opts.not_in_place_upgrade = false;
 }
 
 bool
@@ -84,6 +86,10 @@ process_greenplum_option(greenplumOption option)
 			greenplum_user_opts.output_dir = pg_strdup(optarg);
 			break;
 
+		case GREENPLUM_NOT_IN_PLACE_UPGRADE:
+			greenplum_user_opts.not_in_place_upgrade = true;
+			break;
+
 		default:
 			return false;
 	}
@@ -137,4 +143,10 @@ char*
 get_output_dir(void)
 {
 	return greenplum_user_opts.output_dir;
+}
+
+bool
+not_in_place_upgrade(void)
+{
+	return greenplum_user_opts.not_in_place_upgrade;
 }
