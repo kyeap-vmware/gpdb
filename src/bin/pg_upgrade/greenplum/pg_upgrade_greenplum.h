@@ -49,12 +49,12 @@ typedef enum {
 	{"output-dir", required_argument, NULL, GREENPLUM_OUTPUT_DIR},
 
 #define GREENPLUM_USAGE "\
-      --mode=TYPE               designate node type to upgrade, \"segment\" or \"dispatcher\" (default \"segment\")\n\
-      --progress                enable progress reporting\n\
-      --continue-check-on-fatal continue to run through all pg_upgrade checks without upgrade. Stops on major issues\n\
-      --skip-target-check       skip all checks on new/target cluster\n\
-      --skip-checks             skip all checks\n\
-      --output-dir              directory to output logs. Default=\"COORDINATOR_DATA_DIRECTORY/pg_upgrade.d\"\n\
+  --mode=TYPE                   designate node type to upgrade, \"segment\" or \"dispatcher\" (default \"segment\")\n\
+  --progress                    enable progress reporting\n\
+  --continue-check-on-fatal     continue to run through all pg_upgrade checks without upgrade. Stops on major issues\n\
+  --skip-target-check           skip all checks on new/target cluster\n\
+  --skip-checks                 skip all checks\n\
+  --output-dir                  directory to output logs. Default=\"COORDINATOR_DATA_DIRECTORY/pg_upgrade.d\"\n\
 "
 
 /* option_gp.c */
