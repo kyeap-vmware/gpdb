@@ -2610,15 +2610,29 @@ StartTransaction(void)
 			break;
 	}
 
-	ereportif(Debug_print_snapshot_dtm, LOG,
-			  (errmsg("[Distributed Snapshot #%u] *StartTransaction* "
-					  "(gxid = "UINT64_FORMAT", xid = " UINT64_FORMAT ", '%s')",
-					  (!FirstSnapshotSet ? 0 :
-					   GetTransactionSnapshot()->
-					   distribSnapshotWithLocalMapping.ds.distribSnapshotId),
-					  getDistributedTransactionId(),
-					  U64FromFullTransactionId(s->fullTransactionId),
-					  DtxContextToString(DistributedTransactionContext))));
+	/* some verbose logging for the GPDB-specific snapshot info */
+	if (Debug_print_snapshot_dtm) 
+	{
+		char 	header[MAXFNAMELEN + 32]; /* max restore point name length is MAXFNAMELEN */
+		Snapshot ss = FirstSnapshotSet ? GetTransactionSnapshot() : NULL;
+
+		if (!ss)
+			snprintf(header, MAXFNAMELEN + 32, "[Snapshot not set]");
+		else if (ss->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
+			snprintf(header, MAXFNAMELEN + 32, "[Distributed Snapshot #%u]", ss->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.distribSnapshotId);
+		else if (ss->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+			snprintf(header, MAXFNAMELEN + 32, "[Restore point Snapshot %s]", ss->gpSnapshotInfo.rpname);
+		else
+			snprintf(header, MAXFNAMELEN + 32, "[Local Snapshot]");
+
+		ereport(LOG,
+				  (errmsg("%s *StartTransaction* "
+						  "(gxid = "UINT64_FORMAT", xid = " UINT64_FORMAT ", '%s')",
+						  header,
+						  getDistributedTransactionId(),
+						  U64FromFullTransactionId(s->fullTransactionId),
+						  DtxContextToString(DistributedTransactionContext))));
+	}
 
 	/*
 	 * Assign a new LocalTransactionId, and combine it with the backendId to

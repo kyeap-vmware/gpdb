@@ -300,6 +300,86 @@ SnapMgrInit(void)
 }
 
 /*
+ * GPDB: get the snapshot based on restore point settings.
+ *
+ * Upon successful retrieval of a restore point based snapshot, set CurrentSnapshot
+ * to that snapshot and return it. Otherwise, return InvalidSnapshot.
+ */
+static Snapshot GetRestorePointBasedSnapshot(void)
+{
+	RestorePointInfo 		rp;
+	char 				rpname[MAXFNAMELEN];
+	char 				snapshotname[MAXRPSNAPSHOTNAMELEN];
+	bool 				found;
+
+	/* Irrelevant if I'm not a hot standby using the restore point snapshot mode. */
+	if (!IS_RESTOREPOINT_HOT_STANDBY_BACKEND())
+		return InvalidSnapshot;
+
+	/* Irrelevant for single-node mode, such as utility or maintenance mode (mostly just for tests). */
+	if (Gp_role == GP_ROLE_UTILITY || gp_maintenance_mode)
+		return InvalidSnapshot;	
+
+	/* Skip if we are creating fresh snapshot when replaying a new restore point. */
+	if (DistributedTransactionContext == DTX_CONTEXT_CREATE_RP_SNAPSHOT)
+		return InvalidSnapshot;
+
+	/* Skip if we already set one snapshot in the current transaction. */
+	if (FirstSnapshotSet)
+		return CurrentSnapshot;
+
+	/*
+	 * Now get the restore point name. 
+	 * For QD, it is either specified by GUC or just using the latest restore point.
+	 * For QE, it is passed via distributed snapshot dispatched from QD.
+	 */
+	MemSet(rpname, 0, MAXFNAMELEN);
+	if (IS_HOT_STANDBY_QD())
+	{
+		if (!gp_hot_standby_snapshot_restore_point_name)
+		{
+			ereport(ERROR,
+						(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+						errmsg("gp_hot_standby_snapshot_restore_point_name is not set"),
+						errhint("This hot standby server is under \'restorepoint\' snapshot mode. "
+							"To use the hot standby feature, create a restore point on primary "
+							"coordinator using gp_create_restore_point, and set "
+							"gp_hot_standby_snapshot_restore_point_name on the standby accordingly."
+							"\nUse \'inconsistent\' snapshot mode only if there is no write "
+							"activity on primary. Otherwise, the query results on hot standby might be inconsistent.")));
+		}
+		else
+			strncpy(rpname, gp_hot_standby_snapshot_restore_point_name, MAXFNAMELEN);
+	}
+	else if (IS_HOT_STANDBY_QE())
+		strncpy(rpname, QEDtxContextInfo.gpSnapshotInfo.rpname, MAXFNAMELEN);
+
+	/* Now find the restore point hash entry, and import the snapshot */
+	LWLockAcquire(RestorePointSnapshotHashLock, LW_SHARED);
+	rp = hash_search(RestorePointSnapshotHash, rpname, HASH_FIND, &found);
+	if (!found)
+		ereport(ERROR,
+					(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+					errmsg("cannot find snapshot to use for restore point \"%s\"",
+								rpname),
+					errdetail("The restore point does not exist or the corresponding snapshot has been invalidated."),
+					errhint("Please%s create a new one on primary coordinator using gp_create_restore_point. ",
+							hash_get_num_entries(RestorePointSnapshotHash) < gp_max_restore_point_snapshots ? "" : 
+								" increase gp_max_restore_point_snapshots and")));
+
+	RpSnapshotFileName(snapshotname, rpname);
+	ImportSnapshot(snapshotname);
+	LWLockRelease(RestorePointSnapshotHashLock);
+	FirstSnapshotSet = true;
+
+	/* For QD, populate the restore point name. */
+	StrNCpy(CurrentSnapshot->gpSnapshotInfo.rpname, rpname, MAXFNAMELEN);
+	CurrentSnapshot->gpSnapshotMode = GP_SNAPSHOT_MODE_RESTOREPOINT;
+
+	return CurrentSnapshot;
+}
+
+/*
  * GetTransactionSnapshot
  *		Get the appropriate snapshot for a new query in a transaction.
  *
@@ -322,6 +402,10 @@ GetTransactionSnapshot(void)
 		Assert(!FirstSnapshotSet);
 		return HistoricSnapshot;
 	}
+
+	/* GPDB: check restore point based snapshot. No-op if it doesn't apply. */
+	if (GetRestorePointBasedSnapshot() != InvalidSnapshot)
+		return CurrentSnapshot;
 
 	/* First call in transaction? */
 	if (!FirstSnapshotSet)
@@ -371,7 +455,7 @@ GetTransactionSnapshot(void)
 	{
 		elog((Debug_print_snapshot_dtm ? LOG : DEBUG5),
 			 "[Distributed Snapshot #%u] *Serializable* (gxid = "UINT64_FORMAT", '%s')",
-			 CurrentSnapshot->distribSnapshotWithLocalMapping.ds.distribSnapshotId,
+			 CurrentSnapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.distribSnapshotId,
 			 getDistributedTransactionId(),
 			 DtxContextToString(DistributedTransactionContext));
 
@@ -387,7 +471,7 @@ GetTransactionSnapshot(void)
 
 	elog((Debug_print_snapshot_dtm ? LOG : DEBUG5),
 		 "[Distributed Snapshot #%u] (gxid = "UINT64_FORMAT", '%s')",
-		 CurrentSnapshot->distribSnapshotWithLocalMapping.ds.distribSnapshotId,
+		 CurrentSnapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.distribSnapshotId,
 		 getDistributedTransactionId(),
 		 DtxContextToString(DistributedTransactionContext));
 
@@ -637,7 +721,7 @@ SetTransactionSnapshot(Snapshot sourcesnap, VirtualTransactionId *sourcevxid,
 	 * distributed snapshot from being created in GetSnapshotData() and ensures
 	 * that we can use the distributed snapshot from the source snapshot below.
 	 */
-	if (sourcesnap->haveDistribSnapshot)
+	if (sourcesnap->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 		CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, DTX_CONTEXT_LOCAL_ONLY);
 	else
 		CurrentSnapshot = GetSnapshotData(&CurrentSnapshotData, DistributedTransactionContext);
@@ -662,11 +746,11 @@ SetTransactionSnapshot(Snapshot sourcesnap, VirtualTransactionId *sourcevxid,
 	/*
 	 * GPDB: Copy over distributed snapshot if present.
 	 */
-	if (sourcesnap->haveDistribSnapshot)
+	if (sourcesnap->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 	{
-		CurrentSnapshot->haveDistribSnapshot = true;
-		DistributedSnapshot_Copy(&CurrentSnapshot->distribSnapshotWithLocalMapping.ds,
-								 &sourcesnap->distribSnapshotWithLocalMapping.ds);
+		CurrentSnapshot->gpSnapshotMode = GP_SNAPSHOT_MODE_DISTRIBUTED;
+		DistributedSnapshot_Copy(&CurrentSnapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds,
+								 &sourcesnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds);
 	}
 	/* NB: curcid should NOT be copied, it's a local matter */
 
@@ -680,8 +764,15 @@ SetTransactionSnapshot(Snapshot sourcesnap, VirtualTransactionId *sourcevxid,
 	 * Note: in serializable mode, predicate.c will do this a second time. It
 	 * doesn't seem worth contorting the logic here to avoid two calls,
 	 * especially since it's not clear that predicate.c *must* do this.
+	 * 
+	 * GPDB: don't throw error if we are a hot standby trying to importing
+	 * restore point based snapshot.
 	 */
-	if (sourceproc != NULL)
+	if (IS_RESTOREPOINT_HOT_STANDBY_BACKEND())
+	{
+		/* nothing to do */
+	}
+	else if (sourceproc != NULL)
 	{
 		if (!ProcArrayInstallRestoredXmin(CurrentSnapshot->xmin, sourceproc))
 			ereport(ERROR,
@@ -745,13 +836,13 @@ CopySnapshot(Snapshot snapshot)
 		size += snapshot->subxcnt * sizeof(TransactionId);
 	dslmoff = dsoff = size;
 
-	if (snapshot->haveDistribSnapshot &&
-		snapshot->distribSnapshotWithLocalMapping.ds.count > 0)
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED &&
+		snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count > 0)
 	{
-		size += snapshot->distribSnapshotWithLocalMapping.ds.count *
+		size += snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count *
 			sizeof(DistributedTransactionId);
 		dslmoff = size;
-		size += snapshot->distribSnapshotWithLocalMapping.ds.count *
+		size += snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count *
 			sizeof(TransactionId);
 	}
 
@@ -788,32 +879,38 @@ CopySnapshot(Snapshot snapshot)
 	else
 		newsnap->subxip = NULL;
 
-	newsnap->distribSnapshotWithLocalMapping.ds.inProgressXidArray = NULL;
-	newsnap->distribSnapshotWithLocalMapping.inProgressMappedLocalXids = NULL;
-	if (snapshot->haveDistribSnapshot &&
-		snapshot->distribSnapshotWithLocalMapping.ds.count > 0)
+	/* GPDB-specific snapshot info */
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 	{
-		newsnap->distribSnapshotWithLocalMapping.ds.inProgressXidArray =
+		newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.inProgressXidArray = NULL;
+		newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.inProgressMappedLocalXids = NULL;
+	}
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED &&
+		snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count > 0)
+	{
+		newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.inProgressXidArray =
 			(DistributedTransactionId*) ((char *) newsnap + dsoff);
-		newsnap->distribSnapshotWithLocalMapping.inProgressMappedLocalXids =
+		newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.inProgressMappedLocalXids =
 			(TransactionId*) ((char *) newsnap + dslmoff);
 
-		memcpy(newsnap->distribSnapshotWithLocalMapping.ds.inProgressXidArray,
-				snapshot->distribSnapshotWithLocalMapping.ds.inProgressXidArray,
-				snapshot->distribSnapshotWithLocalMapping.ds.count *
+		memcpy(newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.inProgressXidArray,
+				snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.inProgressXidArray,
+				snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count *
 				sizeof(DistributedTransactionId));
 
-		if (snapshot->distribSnapshotWithLocalMapping.currentLocalXidsCount > 0)
+		if (snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.currentLocalXidsCount > 0)
 		{
 			Assert (!IS_QUERY_DISPATCHER());
-			Assert(snapshot->distribSnapshotWithLocalMapping.currentLocalXidsCount <=
-					snapshot->distribSnapshotWithLocalMapping.ds.count);
-			memcpy(newsnap->distribSnapshotWithLocalMapping.inProgressMappedLocalXids,
-					snapshot->distribSnapshotWithLocalMapping.inProgressMappedLocalXids,
-					snapshot->distribSnapshotWithLocalMapping.currentLocalXidsCount *
+			Assert(snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.currentLocalXidsCount <=
+					snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds.count);
+			memcpy(newsnap->gpSnapshotInfo.distribSnapshotWithLocalMapping.inProgressMappedLocalXids,
+					snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.inProgressMappedLocalXids,
+					snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.currentLocalXidsCount *
 					sizeof(TransactionId));
 		}
 	}
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+		StrNCpy(newsnap->gpSnapshotInfo.rpname, snapshot->gpSnapshotInfo.rpname, MAXFNAMELEN);
 
 	return newsnap;
 }
@@ -1307,7 +1404,6 @@ AtEOXact_Snapshot(bool isCommit, bool resetXmin)
 	Assert(resetXmin || MyPgXact->xmin == 0);
 }
 
-
 /*
  * ExportSnapshot
  *		Export the snapshot to a file so that other backends can import it.
@@ -1316,6 +1412,18 @@ AtEOXact_Snapshot(bool isCommit, bool resetXmin)
  */
 char *
 ExportSnapshot(Snapshot snapshot)
+{
+	return ExportSnapshotWithName(snapshot, NULL);
+}
+
+/*
+ * ExportSnapshotWithName
+ * 		GPDB: this is the original upstream ExportSnapshot(), but
+ * 		optionally takes a snapshot name to export instead of the default
+ *		upstream format. Also, we'll include distributed snapshot too.
+ */
+char *
+ExportSnapshotWithName(Snapshot snapshot, const char *snapshot_name)
 {
 	TransactionId topXid;
 	TransactionId *children;
@@ -1367,29 +1475,41 @@ ExportSnapshot(Snapshot snapshot)
 	nchildren = xactGetCommittedChildren(&children);
 
 	/*
-	 * Generate file path for the snapshot.  We start numbering of snapshots
-	 * inside the transaction from 1.
+	 * Generate file path for the snapshot if not given.  We start numbering
+	 * of snapshots inside the transaction from 1.
 	 */
-	snprintf(path, sizeof(path), SNAPSHOT_EXPORT_DIR "/%08X-%08X-%d",
-			 MyProc->backendId, MyProc->lxid, list_length(exportedSnapshots) + 1);
+	if (!snapshot_name)
+		snprintf(path, sizeof(path), SNAPSHOT_EXPORT_DIR "/%08X-%08X-%d",
+				 MyProc->backendId, MyProc->lxid, list_length(exportedSnapshots) + 1);
+	else
+		snprintf(path, sizeof(path), SNAPSHOT_EXPORT_DIR "/%s",
+				 snapshot_name);
 
 	/*
 	 * Copy the snapshot into TopTransactionContext, add it to the
 	 * exportedSnapshots list, and mark it pseudo-registered.  We do this to
 	 * ensure that the snapshot's xmin is honored for the rest of the
 	 * transaction.
+	 *
+	 * GPDB: do not do this if we are in the restore point based snapshot
+	 * mode. Such a snapshot is exported by the startup process and will have
+	 * different lifecycle than normal exported snapshots. So don't register it.
 	 */
-	snapshot = CopySnapshot(snapshot);
+	if (!(InHotStandby && gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT))
+	{
+		snapshot = CopySnapshot(snapshot);
 
-	oldcxt = MemoryContextSwitchTo(TopTransactionContext);
-	esnap = (ExportedSnapshot *) palloc(sizeof(ExportedSnapshot));
-	esnap->snapfile = pstrdup(path);
-	esnap->snapshot = snapshot;
-	exportedSnapshots = lappend(exportedSnapshots, esnap);
-	MemoryContextSwitchTo(oldcxt);
+		oldcxt = MemoryContextSwitchTo(TopTransactionContext);
+		esnap = (ExportedSnapshot *) palloc(sizeof(ExportedSnapshot));
+		esnap->snapfile = pstrdup(path);
+		esnap->snapshot = snapshot;
+		exportedSnapshots = lappend(exportedSnapshots, esnap);
+		MemoryContextSwitchTo(oldcxt);
 
-	snapshot->regd_count++;
-	pairingheap_add(&RegisteredSnapshots, &snapshot->ph_node);
+		snapshot->regd_count++;
+
+		pairingheap_add(&RegisteredSnapshots, &snapshot->ph_node);
+	}
 
 	/*
 	 * Fill buf with a text serialization of the snapshot, plus identification
@@ -1447,9 +1567,9 @@ ExportSnapshot(Snapshot snapshot)
 	/*
 	 * GPDB: Serialize distributed snapshot if present.
 	 */
-	if (snapshot->haveDistribSnapshot)
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 	{
-		distributed_snapshot = &snapshot->distribSnapshotWithLocalMapping.ds;
+		distributed_snapshot = &snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds;
 		appendStringInfo(&buf, "dsxminall:%lu\n", distributed_snapshot->xminAllDistributedSnapshots);
 		appendStringInfo(&buf, "dsid:%d\n", distributed_snapshot->distribSnapshotId);
 		appendStringInfo(&buf, "dsxmin:%lu\n", distributed_snapshot->xmin);
@@ -1625,6 +1745,8 @@ parseVxidFromText(const char *prefix, char **s, const char *filename,
  *		Import a previously exported snapshot.  The argument should be a
  *		filename in SNAPSHOT_EXPORT_DIR.  Load the snapshot from that file.
  *		This is called by "SET TRANSACTION SNAPSHOT 'foo'".
+ * 		GPDB: this can be called when using restore point based snapshot mode.
+ * 		Certain upstream checks need to be skipped under that mode.
  */
 void
 ImportSnapshot(const char *idstr)
@@ -1660,17 +1782,31 @@ ImportSnapshot(const char *idstr)
 	/*
 	 * If we are in read committed mode then the next query would execute with
 	 * a new snapshot thus making this function call quite useless.
+	 *
+	 * GPDB: throw a more pointed error if we are a hot standby trying to import
+	 * restore point based snapshot.
 	 */
 	if (!IsolationUsesXactSnapshot())
-		ereport(ERROR,
-				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("a snapshot-importing transaction must have isolation level SERIALIZABLE or REPEATABLE READ")));
+	{
+		if (IS_RESTOREPOINT_HOT_STANDBY_BACKEND())
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("restorepoint snapshot mode requires an isolation level of REPEATABLE READ"),
+					 errhint("Consider setting default_transaction_isolation to 'REPEATABLE READ' cluster wide.")));
+		else
+			ereport(ERROR,
+					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					 errmsg("a snapshot-importing transaction must have isolation level SERIALIZABLE or REPEATABLE READ")));
+	}
 
 	/*
 	 * Verify the identifier: only 0-9, A-F and hyphens are allowed.  We do
 	 * this mainly to prevent reading arbitrary files.
+	 *
+	 * GPDB: restore point based snapshot mode has special
+	 * snapshot name which allows any characters.
 	 */
-	if (strspn(idstr, "0123456789ABCDEF-") != strlen(idstr))
+	if (strspn(idstr, "0123456789ABCDEF-") != strlen(idstr) && !IS_RESTOREPOINT_HOT_STANDBY_BACKEND())
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 				 errmsg("invalid snapshot identifier: \"%s\"", idstr)));
@@ -1766,7 +1902,7 @@ ImportSnapshot(const char *idstr)
 				errmsg("cannot import distributed snapshot in utility mode"),
 				errhint("export the snapshot in utility mode")));
 		}
-		distributed_snapshot = &snapshot.distribSnapshotWithLocalMapping.ds;
+		distributed_snapshot = &snapshot.gpSnapshotInfo.distribSnapshotWithLocalMapping.ds;
 		distributed_snapshot->xminAllDistributedSnapshots = parseDistributedXidFromText("dsxminall:", &filebuf, path);
 		distributed_snapshot->distribSnapshotId = parseIntFromText("dsid:", &filebuf, path);
 		distributed_snapshot->xmin = parseDistributedXidFromText("dsxmin:", &filebuf, path);
@@ -1784,16 +1920,19 @@ ImportSnapshot(const char *idstr)
 		distributed_snapshot->inProgressXidArray = (DistributedTransactionId *) palloc(dxcnt * sizeof(DistributedTransactionId));
 		for (i = 0; i < dxcnt; i++)
 			distributed_snapshot->inProgressXidArray[i] = parseDistributedXidFromText("dsxip:", &filebuf, path);
-		snapshot.haveDistribSnapshot = true;
+		snapshot.gpSnapshotMode = GP_SNAPSHOT_MODE_DISTRIBUTED;
 	}
 
 	/*
 	 * Do some additional sanity checking, just to protect ourselves.  We
 	 * don't trouble to check the array elements, just the most critical
 	 * fields.
+	 *
+	 * GPDB: restore point snapshot is generated by startup process which
+	 * doesn't have valid vxid or dbid. Skip the checks.
 	 */
-	if (!VirtualTransactionIdIsValid(src_vxid) ||
-		!OidIsValid(src_dbid) ||
+	if ((!IS_RESTOREPOINT_HOT_STANDBY_BACKEND() && (!VirtualTransactionIdIsValid(src_vxid) ||
+		!OidIsValid(src_dbid))) ||
 		!TransactionIdIsNormal(snapshot.xmin) ||
 		!TransactionIdIsNormal(snapshot.xmax))
 		ereport(ERROR,
@@ -1826,14 +1965,66 @@ ImportSnapshot(const char *idstr)
 	 * xmin as being globally applicable.  But that would require some
 	 * additional syntax, since that has to be known when the snapshot is
 	 * initially taken.  (See pgsql-hackers discussion of 2011-10-21.)
+	 *
+	 * GPDB: restore point snapshot is generated by startup process which
+	 * does not have valid dbid.
 	 */
-	if (src_dbid != MyDatabaseId)
+	AssertImply(IS_RESTOREPOINT_HOT_STANDBY_BACKEND(), src_dbid != MyDatabaseId);
+	if (src_dbid != MyDatabaseId && !IS_RESTOREPOINT_HOT_STANDBY_BACKEND())
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				 errmsg("cannot import a snapshot from a different database")));
 
 	/* OK, install the snapshot */
 	SetTransactionSnapshot(&snapshot, &src_vxid, src_pid, NULL);
+}
+
+/*
+ * ReadXminFromSnapshot
+ *		GPDB: A partial ImportSnapshot - just read up to xmin and return the value.
+ *		Since we don't do SetTransactionSnapshot here, we don't check the various
+ * 		conditions as in ImportSnapshot.
+ */
+static TransactionId ReadXminFromSnapshot(const char *idstr)
+{
+	char		path[MAXPGPATH];
+	FILE	   *f;
+	struct stat stat_buf;
+	char	   *filebuf;
+	VirtualTransactionId src_vxid;
+	TransactionId 		xmin;
+
+	snprintf(path, MAXPGPATH, SNAPSHOT_EXPORT_DIR "/%s", idstr);
+
+	f = AllocateFile(path, PG_BINARY_R);
+	if (!f)
+		ereport(ERROR,
+				(errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				 errmsg("invalid snapshot identifier: \"%s\"", idstr)));
+
+	/* get the size of the file so that we know how much memory we need */
+	if (fstat(fileno(f), &stat_buf))
+		elog(ERROR, "could not stat file \"%s\": %m", path);
+
+	/* and read the file into a palloc'd string */
+	filebuf = (char *) palloc(stat_buf.st_size + 1);
+	if (fread(filebuf, stat_buf.st_size, 1, f) != 1)
+		elog(ERROR, "could not read file \"%s\": %m", path);
+
+	filebuf[stat_buf.st_size] = '\0';
+
+	FreeFile(f);
+
+	parseVxidFromText("vxid:", &filebuf, path, &src_vxid);
+	(void) parseIntFromText("pid:", &filebuf, path);
+	/* we abuse parseXidFromText a bit here ... */
+	(void) parseXidFromText("dbid:", &filebuf, path);
+	(void) parseIntFromText("iso:", &filebuf, path);
+	(void) parseIntFromText("ro:", &filebuf, path);
+
+	xmin = parseXidFromText("xmin:", &filebuf, path);
+
+	return xmin;
 }
 
 /*
@@ -1850,6 +2041,10 @@ XactHasExportedSnapshots(void)
  * DeleteAllExportedSnapshotFiles
  *		Clean up any files that have been left behind by a crashed backend
  *		that had exported snapshots before it died.
+ * 		In GPDB restore point snapshot mode, we don't delete the snapshot
+ * 		that's still in use as indicated by gp_hot_standby_snapshot_restore_point_name.
+ * 		Note that if we are in 'inconsistent' snapshot mode, we'll still
+ * 		delete everything.
  *
  * This should be called during database startup or crash recovery.
  */
@@ -1859,6 +2054,10 @@ DeleteAllExportedSnapshotFiles(void)
 	char		buf[MAXPGPATH + sizeof(SNAPSHOT_EXPORT_DIR)];
 	DIR		   *s_dir;
 	struct dirent *s_de;
+	char rp_snapshot_in_use[MAXRPSNAPSHOTNAMELEN];
+
+	if (gp_hot_standby_snapshot_restore_point_name)
+		RpSnapshotFileName(rp_snapshot_in_use, gp_hot_standby_snapshot_restore_point_name);
 
 	/*
 	 * Problems in reading the directory, or unlinking files, are reported at
@@ -1873,6 +2072,22 @@ DeleteAllExportedSnapshotFiles(void)
 			strcmp(s_de->d_name, "..") == 0)
 			continue;
 
+		/*
+		 * GPDB: if we are under 'restorepoint' mode, don't delete the snapshot
+		 * specified by the gp_hot_standby_snapshot_restore_point_name.
+		 * That will still be needed after restart - we'll register it in 
+		 * ScanAndRememberRpSnapshot() later.
+		 */
+		if (gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT && gp_hot_standby_snapshot_restore_point_name)
+		{
+			ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+				errmsg("skip removing restore point based snapshot \"%s\" because it is still in use",
+						s_de->d_name));
+
+			if (strcmp(s_de->d_name, rp_snapshot_in_use) == 0)
+				continue;
+		}
+
 		snprintf(buf, sizeof(buf), SNAPSHOT_EXPORT_DIR "/%s", s_de->d_name);
 
 		if (unlink(buf) != 0)
@@ -1882,6 +2097,164 @@ DeleteAllExportedSnapshotFiles(void)
 	}
 
 	FreeDir(s_dir);
+}
+
+/*
+ * CreateAndExportRestorePointSnapshot
+ * 		GPDB: create and export snapshot for a given restore point name.
+ *
+ * Also remember this restore point name in the shared hash table - a normal 
+ * backend will use that to import the corresponding snapshot.
+ *
+ * NB: since this is called on startup process, it is important that we keep 
+ * memory tidy. All new memory should be allocated in RpSnapshotMemoryContext 
+ * and freed at the end of the function.
+ */
+void
+CreateAndExportRestorePointSnapshot(const char *rpname)
+{
+	RestorePointInfo 		rp;
+	bool 				found;
+	char 				hashkey[MAXFNAMELEN];
+	char 				snapshotname[MAXRPSNAPSHOTNAMELEN];
+	Snapshot 			snapshot;
+	MemoryContext 			oldcxt;
+	DtxContext 			oldDtxCxt;
+
+	Assert(RpSnapshotMemoryContext);
+	oldcxt = MemoryContextSwitchTo(RpSnapshotMemoryContext);
+
+	MemSet(hashkey, 0, MAXFNAMELEN);
+	strncpy(hashkey, rpname, MAXFNAMELEN);
+	RpSnapshotFileName(snapshotname, hashkey);
+
+	LWLockAcquire(RestorePointSnapshotHashLock, LW_EXCLUSIVE);
+
+	/* skip if we cannot create more snapshots */
+	if (hash_get_num_entries(RestorePointSnapshotHash) >= gp_max_restore_point_snapshots)
+	{
+		ereport(WARNING,
+				(errmsg("cannot create snapshot for \"%s\", gp_max_restore_point_snapshots reached", hashkey),
+				errhint("Consider increasing gp_max_restore_point_snapshots.")));
+		LWLockRelease(RestorePointSnapshotHashLock);
+		return;
+	}
+
+	rp = hash_search(RestorePointSnapshotHash, hashkey, HASH_ENTER, &found);
+
+	/*
+	 * We currently ignore it if the RP is already active. The alternative
+	 * is to update the snapshot for that RP, but we cannot guarantee all
+	 * coordinator and segments have done that when a query comes.
+	 */
+	if (found)
+	{
+		ereport(WARNING,
+				(errmsg("skipping snapshot export for duplicate restore point \"%s\"", hashkey),
+				errhint("Create restore points with unique names.")));
+		LWLockRelease(RestorePointSnapshotHashLock);
+		return;
+	}
+
+	/* Temporarily set the dtx context for creating snapshot. */
+	oldDtxCxt = DistributedTransactionContext;
+	DistributedTransactionContext = DTX_CONTEXT_CREATE_RP_SNAPSHOT;
+
+	snapshot = GetTransactionSnapshot();
+	strncpy(snapshot->gpSnapshotInfo.rpname, hashkey, MAXFNAMELEN);
+	ExportSnapshotWithName(snapshot, snapshotname);
+
+	DistributedTransactionContext = oldDtxCxt;
+
+	rp->xmin = snapshot->xmin;
+	LWLockRelease(RestorePointSnapshotHashLock);
+
+	MemoryContextSwitchTo(oldcxt);
+	MemoryContextReset(RpSnapshotMemoryContext);
+
+	ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+		errmsg("created and exported snapshot \"%s\"for restore point \"%s\"",
+				snapshotname, hashkey));
+}
+
+/*
+ * DeleteExportedSnapshotFile
+ *		Similar to DeleteAllExportedSnapshotFiles(), just delete one single file.
+ *
+ * GPDB: this is called after invalidating restore point in case of snapshot 
+ * conflict for hot standby.
+ */
+void
+DeleteExportedSnapshotFile(const char* filename)
+{
+	char		buf[MAXPGPATH + sizeof(SNAPSHOT_EXPORT_DIR)];
+
+	snprintf(buf, sizeof(buf), SNAPSHOT_EXPORT_DIR "/%s", filename);
+
+	/*
+	 * Use durable unlink in case system crashed but we don't want to 
+	 * ScanAndRememberRpSnapshot this snapshot anymore.
+	 */
+	durable_unlink(buf, WARNING);
+}
+
+/*
+ * ScanAndRememberRpSnapshot
+ *		Scan the pg_snapshots directory and remember the snapshot for
+ * 		the restore point as indicated by gp_hot_standby_snapshot_restore_point_name.
+ */
+void
+ScanAndRememberRpSnapshot(void)
+{
+	DIR			*s_dir;
+	struct dirent		*s_de;
+	RestorePointInfo 	rp;
+	char 			rpname[MAXFNAMELEN];
+	char 			rp_snapshot_in_use[MAXRPSNAPSHOTNAMELEN];
+	MemoryContext 		oldcxt;
+	bool 			found = false;
+
+	Assert(RpSnapshotMemoryContext);
+
+	oldcxt = MemoryContextSwitchTo(RpSnapshotMemoryContext);
+
+	/* no need if no restore point is in use */ 
+	if (!gp_hot_standby_snapshot_restore_point_name)
+		return;
+
+	RpSnapshotFileName(rp_snapshot_in_use, gp_hot_standby_snapshot_restore_point_name);
+
+	s_dir = AllocateDir(SNAPSHOT_EXPORT_DIR);
+
+	while ((s_de = ReadDirExtended(s_dir, SNAPSHOT_EXPORT_DIR, LOG)) != NULL)
+	{
+		if (strcmp(s_de->d_name, rp_snapshot_in_use) != 0)
+			continue;
+
+		found = true;
+		MemSet(rpname, 0, MAXFNAMELEN);
+		StrNCpy(rpname, gp_hot_standby_snapshot_restore_point_name, MAXFNAMELEN);
+
+		/* no need to acquire RestorePointSnapshotHashLock as we don't allow connection yet */
+		rp = hash_search(RestorePointSnapshotHash, rpname, HASH_ENTER, NULL);
+		rp->xmin = ReadXminFromSnapshot(s_de->d_name);
+
+		ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+			errmsg("found restore point based snapshot \"%s\" and register it",
+					s_de->d_name));
+	}
+
+	if (!found)
+		ereport(WARNING,
+			errmsg("did not find snapshot file \"%s\" for restore point \"%s\"",
+					rp_snapshot_in_use, gp_hot_standby_snapshot_restore_point_name),
+			errdetail("The snapshot might have been invalidated before restart."),
+			errhint("Create a new restore point and seet gp_hot_standby_snapshot_restore_point_name."));
+
+	FreeDir(s_dir);
+
+	MemoryContextSwitchTo(oldcxt);
+	MemoryContextReset(RpSnapshotMemoryContext);
 }
 
 /*
@@ -2458,7 +2831,7 @@ XidInMVCCSnapshot(TransactionId xid, Snapshot snapshot,
 	 * In the QD, the distributed transactions become visible at the same time
 	 * as the corresponding local ones, so we can rely on the local XIDs.
 	 */
-	if (snapshot->haveDistribSnapshot && !distributedSnapshotIgnore &&
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED && !distributedSnapshotIgnore &&
 		!IS_QUERY_DISPATCHER())
 	{
 		DistributedSnapshotCommitted	distributedSnapshotCommitted;
@@ -2484,7 +2857,7 @@ XidInMVCCSnapshot(TransactionId xid, Snapshot snapshot,
 		 */
 		distributedSnapshotCommitted =
 			DistributedSnapshotWithLocalMapping_CommittedTest(
-				&snapshot->distribSnapshotWithLocalMapping,
+				&snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping,
 				xid, false);
 
 		switch (distributedSnapshotCommitted)

@@ -5,4 +5,5 @@ test: hot_standby/query_conflict
 test: uao/hot_standby_snapshot_conflict_row
 test: uao/hot_standby_snapshot_conflict_column
 test: hot_standby/faults
+test: hot_standby/transaction_isolation_rp
 test: hot_standby/teardown

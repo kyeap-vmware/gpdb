@@ -91,7 +91,6 @@ bool gpvars_check_gp_resqueue_priority_default_value(char **newval,
 static bool check_gp_default_storage_options(char **newval, void **extra, GucSource source);
 static void assign_gp_default_storage_options(const char *newval, void *extra);
 
-
 static bool check_pljava_classpath_insecure(bool *newval, void **extra, GucSource source);
 static void assign_pljava_classpath_insecure(bool newval, void *extra);
 static bool check_gp_resource_group_bypass(bool *newval, void **extra, GucSource source);
@@ -419,6 +418,11 @@ int			gp_max_system_slices;
 static int	gp_server_version_num;
 static char *gp_server_version_string;
 
+/* Hot standby snapshot mode related settings */
+int gp_hot_standby_snapshot_mode;
+char *gp_hot_standby_snapshot_restore_point_name;
+int gp_max_restore_point_snapshots;
+
 /* Query Metrics */
 bool		gp_enable_query_metrics = false;
 int			gp_instrument_shmem_size = 5120;
@@ -589,6 +593,12 @@ static const struct config_enum_entry gp_postmaster_address_family_options[] = {
 	{"auto", POSTMASTER_ADDRESS_FAMILY_TYPE_AUTO},
 	{"ipv4", POSTMASTER_ADDRESS_FAMILY_TYPE_IPV4},
 	{"ipv6", POSTMASTER_ADDRESS_FAMILY_TYPE_IPV6},
+	{NULL, 0}
+};
+
+static const struct config_enum_entry gp_hot_standby_snapshot_mode_options[] = {
+	{"inconsistent", HS_SNAPSHOT_INCONSISTENT},
+	{"restorepoint", HS_SNAPSHOT_RESTOREPOINT},
 	{NULL, 0}
 };
 
@@ -4455,6 +4465,16 @@ struct config_int ConfigureNamesInt_gp[] =
 	},
 #endif
 
+	{
+		{"gp_max_restore_point_snapshots", PGC_POSTMASTER, CUSTOM_OPTIONS,
+			gettext_noop("Sets the maximum restore point based snapshots the server keeps track of."),
+			NULL, GUC_NOT_IN_SAMPLE
+		},
+		&gp_max_restore_point_snapshots,
+		1024, 1, 10000,
+		NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, 0, 0, 0, NULL, NULL
@@ -4808,6 +4828,17 @@ struct config_string ConfigureNamesString_gp[] =
 		NULL, NULL, NULL
 	},
 
+	{
+		{"gp_hot_standby_snapshot_restore_point_name", PGC_SUSET, CUSTOM_OPTIONS,
+			gettext_noop("Sets the restore point name which is used by hot standby for transaction isolation."),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_hot_standby_snapshot_restore_point_name,
+		NULL,
+		NULL, NULL, NULL
+	},
+
 #ifdef ENABLE_IC_PROXY
 	{
 		{"gp_interconnect_proxy_addresses", PGC_SIGHUP, GP_ARRAY_CONFIGURATION,
@@ -5093,6 +5124,17 @@ struct config_enum ConfigureNamesEnum_gp[] =
 		NULL, NULL, NULL
 	},
 	
+	{
+		{"gp_hot_standby_snapshot_mode", PGC_SUSET, CUSTOM_OPTIONS,
+			gettext_noop("Sets the mode to use transaction snapshots for hot standby"),
+			NULL,
+			GUC_NOT_IN_SAMPLE
+		},
+		&gp_hot_standby_snapshot_mode,
+		HS_SNAPSHOT_RESTOREPOINT, gp_hot_standby_snapshot_mode_options,
+		NULL, NULL, NULL
+	},
+
 	/* End-of-list marker */
 	{
 		{NULL, 0, 0, NULL, NULL}, NULL, 0, NULL, NULL, NULL

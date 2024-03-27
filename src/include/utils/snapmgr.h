@@ -99,6 +99,13 @@ extern PGDLLIMPORT SnapshotData CatalogSnapshotData;
 	((snapshot)->snapshot_type == SNAPSHOT_MVCC || \
 	 (snapshot)->snapshot_type == SNAPSHOT_HISTORIC_MVCC)
 
+/* GPDB: convenient macros for restore point snapshot mode */
+#define RP_SNAPSHOT_PREFIX 	"gp_snapshot_for_restorepoint"
+#define MAXRPSNAPSHOTNAMELEN 	sizeof(RP_SNAPSHOT_PREFIX) + 1 /*underscore*/ + MAXFNAMELEN /*RP name*/
+#define RpSnapshotFileName(fname, rpname) 		\
+	snprintf((fname), MAXRPSNAPSHOTNAMELEN, "%s_%s", 	\
+		RP_SNAPSHOT_PREFIX, (rpname))
+
 extern Snapshot GetTransactionSnapshot(void);
 extern Snapshot GetLatestSnapshot(void);
 extern void SnapshotSetCommandId(CommandId curcid);
@@ -133,6 +140,9 @@ extern void LogDistributedSnapshotInfo(Snapshot snapshot, const char *prefix);
 extern void ImportSnapshot(const char *idstr);
 extern bool XactHasExportedSnapshots(void);
 extern void DeleteAllExportedSnapshotFiles(void);
+extern void DeleteExportedSnapshotFile(const char* filename);
+extern void CreateAndExportRestorePointSnapshot(const char *rpname);
+extern void ScanAndRememberRpSnapshot(void);
 extern bool ThereAreNoPriorRegisteredSnapshots(void);
 extern TransactionId TransactionIdLimitedForOldSnapshots(TransactionId recentXmin,
 														 Relation relation);
@@ -140,6 +150,7 @@ extern void MaintainOldSnapshotTimeMapping(TimestampTz whenTaken,
 										   TransactionId xmin);
 
 extern char *ExportSnapshot(Snapshot snapshot);
+extern char *ExportSnapshotWithName(Snapshot snapshot, const char *snapshot_name);
 
 /*
  * Utility functions for implementing visibility routines in table AMs.

@@ -15,6 +15,7 @@
 
 #include "access/htup.h"
 #include "access/xlogdefs.h"
+#include "access/xlog_internal.h" /* MAXFNAMELEN */
 #include "datatype/timestamp.h"
 #include "lib/pairingheap.h"
 #include "storage/buf.h"
@@ -125,6 +126,18 @@ typedef struct SnapshotData *Snapshot;
 #define InvalidSnapshot		((Snapshot) NULL)
 
 /*
+ * GPDB-specific snapshot mode, either distributed snapshot or restore point based.
+ */
+typedef enum GpSnapshotMode {
+	/* Local only snapshot */
+	GP_SNAPSHOT_MODE_LOCAL,
+	/* Distributed snapshot, taking dtx into account */
+	GP_SNAPSHOT_MODE_DISTRIBUTED,
+	/* Restore point based snapshot, only for hot standby */
+	GP_SNAPSHOT_MODE_RESTOREPOINT
+} GpSnapshotMode;
+
+/*
  * Struct representing all kind of possible snapshots.
  *
  * There are several different kinds of snapshots:
@@ -185,7 +198,6 @@ typedef struct SnapshotData
 
 	bool		takenDuringRecovery;	/* recovery-shaped snapshot? */
 	bool		copied;			/* false if it's a static snapshot */
-	bool		haveDistribSnapshot; /* True if this snapshot is distributed. */
 
 	CommandId	curcid;			/* in my xact, CID < curcid are visible */
 
@@ -206,10 +218,17 @@ typedef struct SnapshotData
 	XLogRecPtr	lsn;			/* position in the WAL stream when taken */
 
 	/*
-	 * GP: Global information about which transactions are visible for a
-	 * distributed transaction, with cached local xids
+	 * Additional GPDB-specific snapshot info.
 	 */
-	DistributedSnapshotWithLocalMapping	distribSnapshotWithLocalMapping;
+	union
+	{
+		/* Distributed snapshot info, only for GP_SNAPSHOT_MODE_DISTRIBUTED*/
+		DistributedSnapshotWithLocalMapping 	distribSnapshotWithLocalMapping;
+		/* Restore point info, only for GP_SNAPSHOT_MODE_RESTOREPOINT */
+		char 					rpname[MAXFNAMELEN];
+	} gpSnapshotInfo;
+	GpSnapshotMode 	gpSnapshotMode; 		/* is it a local, distributed, or restore-point based snapshot? */
+
 } SnapshotData;
 
 #endif							/* SNAPSHOT_H */

@@ -233,6 +233,10 @@ CreateSharedMemoryAndSemaphores(int port)
 		/* size of parallel cursor count */
 		size = add_size(size, ParallelCursorCountSize());
 
+		/* size of restore point hash table for hot standby */
+		if (EnableHotStandby)
+			size = add_size(size, RestorePointSnapshotHashSize());
+
 		elog(DEBUG3, "invoking IpcMemoryCreate(size=%zu)", size);
 
 		/*
@@ -322,6 +326,13 @@ CreateSharedMemoryAndSemaphores(int port)
 	SessionState_ShmemInit();
 	/* Initialize vmem protection */
 	GPMemoryProtect_ShmemInit();
+
+	/*
+	 * Initialize the restore-point-to-snapshot hash table for hot standby.
+	 * Only used when we are in the 'restorepoint` snapshot mode.
+	 */
+	if (EnableHotStandby)
+		InitRestorePointSnapshotHash();
 
 	CreateSharedProcArray();
 	CreateSharedBackendStatus();

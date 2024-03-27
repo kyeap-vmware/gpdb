@@ -788,6 +788,7 @@ AtEOXact_SharedSnapshot(void)
 /*
  * LogDistributedSnapshotInfo
  *   Log the distributed snapshot info in a given snapshot.
+ *   If the snapshot is restore point based, log the restore point name.
  *
  * The 'prefix' is used to prefix the log message.
  */
@@ -800,37 +801,46 @@ LogDistributedSnapshotInfo(Snapshot snapshot, const char *prefix)
 	StringInfoData buf;
 	initStringInfo(&buf);
 
-	DistributedSnapshotWithLocalMapping *mapping =
-		&(snapshot->distribSnapshotWithLocalMapping);
-
-	DistributedSnapshot *ds = &mapping->ds;
-
-	appendStringInfo(&buf, "%s Distributed snapshot info: "
-			 "xminAllDistributedSnapshots="UINT64_FORMAT", distribSnapshotId=%d"
-			 ", xmin="UINT64_FORMAT", xmax="UINT64_FORMAT", count=%d",
-			 prefix,
-			 ds->xminAllDistributedSnapshots,
-			 ds->distribSnapshotId,
-			 ds->xmin,
-			 ds->xmax,
-			 ds->count);
-
-	appendStringInfoString(&buf, ", In progress array: {");
-
-	for (int no = 0; no < ds->count; no++)
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+		appendStringInfo(&buf, "%s Restore point snapshot info: rpname=%s",
+					prefix, snapshot->gpSnapshotInfo.rpname);
+	else if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 	{
-		if (no != 0)
+		DistributedSnapshotWithLocalMapping *mapping =
+			&(snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping);
+
+		DistributedSnapshot *ds = &mapping->ds;
+
+		appendStringInfo(&buf, "%s Distributed snapshot info: "
+				 "xminAllDistributedSnapshots="UINT64_FORMAT", distribSnapshotId=%d"
+				 ", xmin="UINT64_FORMAT", xmax="UINT64_FORMAT", count=%d",
+				 prefix,
+				 ds->xminAllDistributedSnapshots,
+				 ds->distribSnapshotId,
+				 ds->xmin,
+				 ds->xmax,
+				 ds->count);
+
+		appendStringInfoString(&buf, ", In progress array: {");
+
+		for (int no = 0; no < ds->count; no++)
 		{
-			appendStringInfo(&buf, ", (dx"UINT64_FORMAT")",
-					 ds->inProgressXidArray[no]);
+			if (no != 0)
+			{
+				appendStringInfo(&buf, ", (dx"UINT64_FORMAT")",
+						 ds->inProgressXidArray[no]);
+			}
+			else
+			{
+				appendStringInfo(&buf, " (dx"UINT64_FORMAT")",
+						 ds->inProgressXidArray[no]);
+			}
 		}
-		else
-		{
-			appendStringInfo(&buf, " (dx"UINT64_FORMAT")",
-					 ds->inProgressXidArray[no]);
-		}
+		appendStringInfoString(&buf, "}");
 	}
-	appendStringInfoString(&buf, "}");
+	else
+		appendStringInfo(&buf, "%s Local snapshot, no GP-specific info.",
+					prefix);
 
 	elog(LOG, "%s", buf.data);
 	pfree(buf.data);

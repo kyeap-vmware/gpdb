@@ -1601,6 +1601,23 @@ GetLocalOldestXmin(Relation rel, int flags)
 	return result;
 }
 
+/* GPDB: provide a log header string describing the snapshot mode used in dtx context. */
+static char* gpSnapshotInfoMsgHeader(DtxContextInfo *dtxContext)
+{
+	static char msg[128];
+
+	if (dtxContext->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
+		snprintf(msg, sizeof(msg), "[Distributed Snapshot #%u]",
+							dtxContext->gpSnapshotInfo.distributedSnapshot.distribSnapshotId);
+	else if (dtxContext->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+		snprintf(msg, sizeof(msg), "[Restore point snapshot %s]",
+							dtxContext->gpSnapshotInfo.rpname);
+	else
+		snprintf(msg, sizeof(msg), "[Local snapshot]");
+
+	return msg;
+}
+
 void
 updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 						  DtxContext distributedTransactionContext,
@@ -1661,8 +1678,8 @@ updateSharedLocalSnapshot(DtxContextInfo *dtxContextInfo,
 					SharedLocalSnapshotSlot->distributedXid)));
 
 	ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
-			(errmsg("[Distributed Snapshot #%u] *Writer Set Shared* gxid "UINT64_FORMAT", (gxid = "UINT64_FORMAT", slot #%d, '%s', '%s')",
-					QEDtxContextInfo.distributedSnapshot.distribSnapshotId,
+			(errmsg("%s *Writer Set Shared* gxid "UINT64_FORMAT", (gxid = "UINT64_FORMAT", slot #%d, '%s', '%s')",
+					gpSnapshotInfoMsgHeader(&QEDtxContextInfo),
 					SharedLocalSnapshotSlot->distributedXid,
 					getDistributedTransactionId(),
 					SharedLocalSnapshotSlot->slotid,
@@ -1676,9 +1693,7 @@ SnapshotResetDslm(Snapshot snapshot)
 {
 	DistributedSnapshotWithLocalMapping *dslm;
 
-	snapshot->haveDistribSnapshot = false;
-
-	dslm = &snapshot->distribSnapshotWithLocalMapping;
+	dslm = &snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping;
 	dslm->currentLocalXidsCount = 0;
 	dslm->minCachedLocalXid = InvalidTransactionId;
 	dslm->maxCachedLocalXid = InvalidTransactionId;
@@ -1748,8 +1763,8 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 	}
 
 	ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
-			(errmsg("[Distributed Snapshot #%u] *Start Reader Match* gxid = "UINT64_FORMAT" and currcid %d (%s)",
-					QEDtxContextInfo.distributedSnapshot.distribSnapshotId,
+			(errmsg("%s *Start Reader Match* gxid = "UINT64_FORMAT" and currcid %d (%s)",
+					gpSnapshotInfoMsgHeader(&QEDtxContextInfo),
 					QEDtxContextInfo.distributedXid,
 					QEDtxContextInfo.curcid,
 					DtxContextToString(distributedTransactionContext))));
@@ -1815,8 +1830,8 @@ readerFillLocalSnapshot(Snapshot snapshot, DtxContext distributedTransactionCont
 			 * Every second issue warning.
 			 */
 			ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
-					(errmsg("[Distributed Snapshot #%u] *No Match* gxid "UINT64_FORMAT" = "UINT64_FORMAT" and segmateSync %d = %d (%s)",
-							QEDtxContextInfo.distributedSnapshot.distribSnapshotId,
+					(errmsg("%s *No Match* gxid "UINT64_FORMAT" = "UINT64_FORMAT" and segmateSync %d = %d (%s)",
+							gpSnapshotInfoMsgHeader(&QEDtxContextInfo),
 							QEDtxContextInfo.distributedXid,
 							SharedLocalSnapshotSlot->distributedXid,
 							QEDtxContextInfo.segmateSync,
@@ -2220,7 +2235,8 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	TransactionId replication_slot_catalog_xmin = InvalidTransactionId;
 
 	Assert(snapshot != NULL);
-	DistributedSnapshot *ds = &snapshot->distribSnapshotWithLocalMapping.ds;
+	/* This will only be used under GP_SNAPSHOT_MODE_DISTRIBUTED */
+	DistributedSnapshot *ds = &snapshot->gpSnapshotInfo.distribSnapshotWithLocalMapping.ds;
 
 	/*
 	 * Support for true serializable isolation is not yet implemented in
@@ -2269,6 +2285,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 * GP: Distributed snapshot.
 	 */
 	Assert(distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE ||
+		   distributedTransactionContext == DTX_CONTEXT_CREATE_RP_SNAPSHOT ||
 		   distributedTransactionContext == DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER ||
 		   distributedTransactionContext == DTX_CONTEXT_QE_TWO_PHASE_IMPLICIT_WRITER ||
 		   distributedTransactionContext == DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT ||
@@ -2277,7 +2294,18 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		   distributedTransactionContext == DTX_CONTEXT_QE_FINISH_PREPARED ||
 		   distributedTransactionContext == DTX_CONTEXT_QE_READER);
 
-	SnapshotResetDslm(snapshot);
+	/*
+	 * Perform reset on the GpSnapshotInfo depending on specific GpSnapshotMode.
+	 * One might wonder why we cannot just reset everything to 0: we can't 
+	 * because the distributed snapshot might contains an already-allocated 
+	 * inProgressXidArray, and it will re-use its space forever.
+	 */
+	if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
+		SnapshotResetDslm(snapshot);
+	else if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+		MemSet(snapshot->gpSnapshotInfo.rpname, 0, MAXFNAMELEN);
+	/* reset the mode as we'll set it again when needed */
+	snapshot->gpSnapshotMode = GP_SNAPSHOT_MODE_LOCAL;
 
 	/* executor copy distributed snapshot from QEDtxContextInfo */
 	if ((distributedTransactionContext == DTX_CONTEXT_QE_TWO_PHASE_EXPLICIT_WRITER ||
@@ -2285,11 +2313,15 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 		 distributedTransactionContext == DTX_CONTEXT_QE_AUTO_COMMIT_IMPLICIT ||
 		 distributedTransactionContext == DTX_CONTEXT_QE_ENTRY_DB_SINGLETON ||
 		 distributedTransactionContext == DTX_CONTEXT_QE_READER) &&
-		QEDtxContextInfo.haveDistributedSnapshot &&
+		QEDtxContextInfo.gpSnapshotMode != GP_SNAPSHOT_MODE_LOCAL &&
 		!Debug_disable_distributed_snapshot)
 	{
-		DistributedSnapshot_Copy(&snapshot->distribSnapshotWithLocalMapping.ds, &QEDtxContextInfo.distributedSnapshot);
-		snapshot->haveDistribSnapshot = true;
+		snapshot->gpSnapshotMode = QEDtxContextInfo.gpSnapshotMode;
+
+		if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
+			DistributedSnapshot_Copy(ds, &QEDtxContextInfo.gpSnapshotInfo.distributedSnapshot);
+		else if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_RESTOREPOINT)
+			StrNCpy(snapshot->gpSnapshotInfo.rpname, QEDtxContextInfo.gpSnapshotInfo.rpname, MAXFNAMELEN);
 	}
 
 	/* reader gang copy local snapshot from writer gang */
@@ -2510,7 +2542,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 			&& needDistributedSnapshot)
 	{
 		CreateDistributedSnapshot(ds);
-		snapshot->haveDistribSnapshot = true;
+		snapshot->gpSnapshotMode = GP_SNAPSHOT_MODE_DISTRIBUTED;
 
 		ereport(Debug_print_full_dtm ? LOG : DEBUG5,
 				(errmsg("Got distributed snapshot from CreateDistributedSnapshot")));
@@ -2532,7 +2564,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 */
 	if (!IS_QUERY_DISPATCHER())
 	{
-		if (snapshot->haveDistribSnapshot)
+		if (snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED)
 			globalxmin = DistributedLog_AdvanceOldestXmin(globalxmin,
 														  ds->xminAllDistributedSnapshots);
 		else if (!gp_maintenance_mode)
@@ -2587,7 +2619,7 @@ GetSnapshotData(Snapshot snapshot, DtxContext distributedTransactionContext)
 	 * DisribToLocalXact sorted lists.
 	 */
 	if (distributedTransactionContext == DTX_CONTEXT_QD_DISTRIBUTED_CAPABLE &&
-		snapshot->haveDistribSnapshot &&
+		snapshot->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED &&
 		ds->count > 1)
 		qsort(ds->inProgressXidArray, ds->count,
 			  sizeof(DistributedTransactionId), DistributedSnapshotMappedEntry_Compare);
@@ -3256,8 +3288,8 @@ UpdateCommandIdInSnapshot(CommandId curcid)
 		if (SharedLocalSnapshotSlot->distributedXid != QEDtxContextInfo.distributedXid)
 		{
 			ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
-					(errmsg("[Distributed Snapshot #%u] *Can't Update Serializable Command Id* QDxid = "UINT64_FORMAT" (gxid = "UINT64_FORMAT", '%s')",
-							QEDtxContextInfo.distributedSnapshot.distribSnapshotId,
+					(errmsg("%s *Can't Update Serializable Command Id* QDxid = "UINT64_FORMAT" (gxid = "UINT64_FORMAT", '%s')",
+							gpSnapshotInfoMsgHeader(&QEDtxContextInfo),
 							SharedLocalSnapshotSlot->distributedXid,
 							getDistributedTransactionId(),
 							DtxContextToString(DistributedTransactionContext))));
@@ -3266,10 +3298,10 @@ UpdateCommandIdInSnapshot(CommandId curcid)
 		}
 
 		ereport((Debug_print_snapshot_dtm ? LOG : DEBUG5),
-				(errmsg("[Distributed Snapshot #%u] *Update Serializable Command "
+				(errmsg("%s *Update Serializable Command "
 						"Id* segment currcid = %d, TransactionSnapshot currcid "
 						"= %d, Shared currcid = %d (gxid = "UINT64_FORMAT", '%s')",
-						QEDtxContextInfo.distributedSnapshot.distribSnapshotId,
+						gpSnapshotInfoMsgHeader(&QEDtxContextInfo),
 						QEDtxContextInfo.curcid,
 						curcid,
 						SharedLocalSnapshotSlot->snapshot.curcid,

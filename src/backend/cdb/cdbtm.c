@@ -1729,13 +1729,13 @@ setupQEDtxContext(DtxContextInfo *dtxContextInfo)
 	/*
 	 * DTX Context Info (even when empty) only comes in QE requests.
 	 */
-	distributedSnapshot = &dtxContextInfo->distributedSnapshot;
+	distributedSnapshot = &dtxContextInfo->gpSnapshotInfo.distributedSnapshot;
 	txnOptions = dtxContextInfo->distributedTxnOptions;
 
 	needDtx = isMppTxOptions_NeedDtx(txnOptions);
 	explicitBegin = isMppTxOptions_ExplicitBegin(txnOptions);
 
-	haveDistributedSnapshot = dtxContextInfo->haveDistributedSnapshot;
+	haveDistributedSnapshot = dtxContextInfo->gpSnapshotMode == GP_SNAPSHOT_MODE_DISTRIBUTED;
 	isSharedLocalSnapshotSlotPresent = (SharedLocalSnapshotSlot != NULL);
 
 	if (DEBUG5 >= log_min_messages || Debug_print_full_dtm)
@@ -1963,7 +1963,7 @@ setupQEDtxContext(DtxContextInfo *dtxContextInfo)
 	if (haveDistributedSnapshot)
 	{
 		elog((Debug_print_snapshot_dtm ? LOG : DEBUG5), "[Distributed Snapshot #%u] *Set QE* currcid = %d (gxid = "UINT64_FORMAT", '%s')",
-			 dtxContextInfo->distributedSnapshot.distribSnapshotId,
+			 dtxContextInfo->gpSnapshotInfo.distributedSnapshot.distribSnapshotId,
 			 dtxContextInfo->curcid,
 			 getDistributedTransactionId(),
 			 DtxContextToString(DistributedTransactionContext));

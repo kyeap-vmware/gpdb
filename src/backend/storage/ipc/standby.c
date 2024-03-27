@@ -31,6 +31,7 @@
 #include "storage/standby.h"
 #include "utils/builtins.h"
 #include "utils/faultinjector.h"
+#include "utils/guc.h"
 #include "utils/hsearch.h"
 #include "utils/memutils.h"
 #include "utils/ps_status.h"
@@ -317,6 +318,60 @@ ResolveRecoveryConflictWithVirtualXIDs(VirtualTransactionId *waitlist,
 	}
 }
 
+/*
+ * GPDB: Check all snapshots taken at restore points and invalidate them if
+ * they conflict with latestRemovedXid. Also remove the on-disk exported
+ * snapshots.
+ */
+static void
+invalidateRPSnapshots(TransactionId latestRemovedXid)
+{
+	HASH_SEQ_STATUS		hash_seq;
+	RestorePointInfo 	rp;
+	bool 			found;
+	char 			snapshotname[MAXRPSNAPSHOTNAMELEN];
+
+	Assert(TransactionIdIsValid(latestRemovedXid));
+
+	hash_seq_init(&hash_seq, RestorePointSnapshotHash);
+
+	/*
+	 * Lock to protect the access to RestorePointSnapshotHash, until we removed the 
+	 * entry *and* the corresponding snapshot files.
+	 */
+	LWLockAcquire(RestorePointSnapshotHashLock, LW_EXCLUSIVE);
+
+	while ((rp = hash_seq_search(&hash_seq)) != NULL)
+	{
+		Assert(TransactionIdIsValid(rp->xmin));
+
+		if (!TransactionIdFollows(rp->xmin, latestRemovedXid))
+		{
+			hash_search(RestorePointSnapshotHash, rp->rpname, HASH_REMOVE, &found);
+			if (!found)
+			{
+				/*
+				 * This shouldn't happen, but we don't want panic in
+				 * startup process, just log and exit.
+				 */
+				hash_seq_term(&hash_seq);
+				ereport(WARNING,
+							errmsg("could not find restore point \"%s\" to invalidate", rp->rpname));
+				break;
+			}
+
+			RpSnapshotFileName(snapshotname, rp->rpname);
+
+			/* Remove the file */
+			DeleteExportedSnapshotFile(snapshotname);
+			ereport((Debug_print_full_dtm ? LOG : DEBUG5),
+						errmsg("invalidated restore point %s and removed its snapshot %s", rp->rpname, snapshotname));
+		}
+	}
+
+	LWLockRelease(RestorePointSnapshotHashLock);
+}
+
 void
 ResolveRecoveryConflictWithSnapshot(TransactionId latestRemovedXid, RelFileNode node)
 {
@@ -355,6 +410,8 @@ ResolveRecoveryConflictWithSnapshot(TransactionId latestRemovedXid, RelFileNode 
 	ResolveRecoveryConflictWithVirtualXIDs(backends,
 										   PROCSIG_RECOVERY_CONFLICT_SNAPSHOT,
 										   true);
+	if (gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT)
+		invalidateRPSnapshots(latestRemovedXid);
 }
 
 void

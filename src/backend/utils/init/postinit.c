@@ -826,6 +826,8 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 	 */
 	if (!bootstrap && !am_mirror)
 	{
+		HotStandbySnapshotMode save;
+
 		/* statement_timestamp must be set for timeouts to work correctly */
 		SetCurrentStatementStartTimestamp();
 		StartTransactionCommand();
@@ -838,7 +840,20 @@ InitPostgres(const char *in_dbname, Oid dboid, const char *username,
 		 */
 		XactIsoLevel = XACT_READ_COMMITTED;
 
+		/*
+		 * GPDB: on hot standby, we might need to rely on restore points
+		 * to create snapshot (HS_SNAPSHOT_RESTOREPOINT). If no restore 
+		 * point is provided, we don't serve queries but we still want to
+		 * be able to be connected. So temporarily use inconsistent snapshot
+		 * mode to allow connection. We are not really using this snapshot
+		 * to do visibility check anyway, as explained by comments above.
+		 */
+		save = gp_hot_standby_snapshot_mode;
+		gp_hot_standby_snapshot_mode = HS_SNAPSHOT_INCONSISTENT;
+
 		(void) GetTransactionSnapshot();
+
+		gp_hot_standby_snapshot_mode = save;
 	}
 
 	/*

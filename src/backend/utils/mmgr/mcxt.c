@@ -73,6 +73,12 @@ MemoryContext OptimizerMemoryContext = NULL;
 /* This is a transient link to the active portal's memory context: */
 MemoryContext PortalContext = NULL;
 
+/*
+ * GPDB: memory context for restore point based snapshot mode.
+ * Used on startup process on the hot standby.
+ */
+MemoryContext RpSnapshotMemoryContext = NULL;
+
 static void MemoryContextCallResetCallbacks(MemoryContext context);
 static void MemoryContextStatsInternal(MemoryContext context, int level,
 									   bool print, int max_children,

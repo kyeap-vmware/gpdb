@@ -131,6 +131,7 @@ char *gp_pause_on_restore_point_replay = "";
  * gp_pause_on_restore_point_replay and a promotion has been requested.
  */
 static bool reachedContinuousRecoveryTarget = false;
+HTAB 	*RestorePointSnapshotHash;
 
 #ifdef WAL_DEBUG
 bool		XLOG_DEBUG = false;
@@ -7410,6 +7411,15 @@ StartupXLOG(void)
 
 				StandbyRecoverPreparedTransactions();
 			}
+
+			/*
+			 * GDPB: scan pg_snapshots and remember the snapshot corresponding to the
+			 * gp_hot_standby_snapshot_restore_point_name, along with the restore point
+			 * name in RestorePointSnapshotHash. We might be replaying the same restore point WAL
+			 * again, but that's OK - we'll ignore them and won't remember it again.
+			 */
+			if (gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT)
+				ScanAndRememberRpSnapshot();
 		}
 
 		/* Initialize resource managers */
@@ -9625,8 +9635,10 @@ CreateCheckPoint(int flags)
 			 * the nextGxid value to set latestCompletedGxid during restart (which 
 			 * the primary does) because nextGxid was bumped in the checkpoint.
 			 */
+			DistributedTransactionId lcgxid;
+
 			LWLockAcquire(ProcArrayLock, LW_SHARED);
-			DistributedTransactionId lcgxid = ShmemVariableCache->latestCompletedGxid;
+			lcgxid = ShmemVariableCache->latestCompletedGxid;
 			LWLockRelease(ProcArrayLock);
 			XLogBeginInsert();
 			XLogRegisterData((char *) (&lcgxid), sizeof(lcgxid));
@@ -10953,7 +10965,18 @@ xlog_redo(XLogReaderState *record)
 	}
 	else if (info == XLOG_RESTORE_POINT)
 	{
-		/* nothing to do here */
+		/*
+		 * GPDB: on hot standby under the 'restorepoint' snapshot mode,
+		 * remember this RP and create snapshot for it.
+		 * This will be used for restorepoint based snapshot isolation on hot
+		 * standby. The feature is only supported for MPP operation, so don't 
+		 * do this in single-node mode such as utility or maintenance mode.
+		 */
+		if (InHotStandby && gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT
+					&& Gp_role != GP_ROLE_UTILITY && !gp_maintenance_mode)
+		{
+			CreateAndExportRestorePointSnapshot(((xl_restore_point *) XLogRecGetData(record))->rp_name);
+		}
 	}
 	else if (info == XLOG_FPI || info == XLOG_FPI_FOR_HINT)
 	{
@@ -13725,3 +13748,35 @@ XLogRequestWalReceiverReply(void)
 {
 	doRequestWalReceiverReply = true;
 }
+
+/* GPDB: Init the restore point hash table for hot standby. */
+void
+InitRestorePointSnapshotHash(void)
+{
+	HASHCTL		info;
+	long		init_table_size,
+				max_table_size;
+
+	init_table_size = gp_max_restore_point_snapshots;
+	max_table_size = gp_max_restore_point_snapshots;
+
+	/* Allocate hash table for RestorePointHashInfoData structs. */
+	MemSet(&info, 0, sizeof(info));
+	info.keysize = MAXFNAMELEN;
+	info.entrysize = sizeof(RestorePointHashInfoData);
+
+	RestorePointSnapshotHash = ShmemInitHash("Restore Point Snapshot hash",
+									   init_table_size,
+									   max_table_size,
+									   &info,
+									   HASH_ELEM | HASH_BLOBS);
+}
+
+/* GPDB: size of the restore point hash table for hot standby. */
+Size
+RestorePointSnapshotHashSize(void)
+{
+	return hash_estimate_size(gp_max_restore_point_snapshots,
+						sizeof(RestorePointHashInfoData));
+}
+

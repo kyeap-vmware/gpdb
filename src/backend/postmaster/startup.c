@@ -32,6 +32,7 @@
 #include "storage/pmsignal.h"
 #include "storage/standby.h"
 #include "utils/guc.h"
+#include "utils/memutils.h"
 #include "utils/timeout.h"
 
 bool am_startup = false;
@@ -57,7 +58,6 @@ static void StartupProcSigHupHandler(SIGNAL_ARGS);
 
 /* Callbacks */
 static void StartupProcExit(int code, Datum arg);
-
 
 /* --------------------------------
  *		signal handler routines
@@ -244,6 +244,15 @@ StartupProcessMain(void)
 	 * Unblock signals (they were blocked when the postmaster forked us)
 	 */
 	PG_SETMASK(&UnBlockSig);
+
+	/*
+	 * Memory context used for 'restorepoint' snapshot mode for hot standby.
+	 * Won't be used if not in that mode.
+	 */
+	if (EnableHotStandby)
+		RpSnapshotMemoryContext = AllocSetContextCreate(TopMemoryContext,
+								"restore point snapshot memory cxt",
+								ALLOCSET_DEFAULT_SIZES);
 
 	/*
 	 * Do what we came for.

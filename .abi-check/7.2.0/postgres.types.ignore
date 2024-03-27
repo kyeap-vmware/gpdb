@@ -1,0 +1,3 @@
+struct DtxContextInfo
+struct SnapshotData
+struct SharedSnapshotSlot

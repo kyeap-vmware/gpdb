@@ -14,18 +14,24 @@
 #ifndef CDBDTXCONTEXTINFO_H
 #define CDBDTXCONTEXTINFO_H
 
+#include "access/xlog_internal.h" /* MAXFNAMELEN */
 #include "utils/snapshot.h"
 
-#define DtxContextInfo_StaticInit {InvalidDistributedTransactionId,false,false,DistributedSnapshot_StaticInit,0,0,0,0}
+#define DtxContextInfo_StaticInit {InvalidDistributedTransactionId,false,GP_SNAPSHOT_MODE_LOCAL,.gpSnapshotInfo.distributedSnapshot=DistributedSnapshot_StaticInit,0,0,0,0}
 
 typedef struct DtxContextInfo
 {
 	DistributedTransactionId 		distributedXid;
 	
-	bool							haveDistributedSnapshot;
 	bool							cursorContext;
 	
-	DistributedSnapshot		 		distributedSnapshot;
+	GpSnapshotMode						gpSnapshotMode;
+	union {
+		/* Distributed snapshot info, only for GP_SNAPSHOT_MODE_DISTRIBUTED*/
+		DistributedSnapshot		 		distributedSnapshot;
+		/* Restore point info, only for GP_SNAPSHOT_MODE_RESTOREPOINT */
+		char 						rpname[MAXFNAMELEN];
+	} gpSnapshotInfo;
 
 	int 							distributedTxnOptions;
 

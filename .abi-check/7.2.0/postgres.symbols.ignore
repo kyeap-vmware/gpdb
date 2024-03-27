@@ -1,1 +1,9 @@
 AppendOptimizedCollectDeadSegments
+ConfigureNamesInt_gp
+ConfigureNamesEnum_gp
+ConfigureNamesString_gp
+MainLWLockNames
+QEDtxContextInfo
+CatalogSnapshotData
+SnapshotSelfData
+SnapshotAnyData

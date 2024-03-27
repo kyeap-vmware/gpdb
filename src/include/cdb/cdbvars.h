@@ -763,6 +763,11 @@ extern GpId GpIdentity;
 #define IS_QUERY_EXECUTOR_BACKEND() (Gp_role == GP_ROLE_EXECUTE && gp_session_id > 0)
 #define IS_HOT_STANDBY_QE() (EnableHotStandby && IS_QUERY_EXECUTOR_BACKEND() && RecoveryInProgress())
 
+/* either IS_HOT_STANDBY_QD or IS_HOT_STANDBY_QE */
+#define IS_HOT_STANDBY_BACKEND() (EnableHotStandby && RecoveryInProgress())
+/* a hot standby backend using the 'restorepoint' snapshot mode, not necessarily QD/QE */
+#define IS_RESTOREPOINT_HOT_STANDBY_BACKEND() (EnableHotStandby && RecoveryInProgress() && gp_hot_standby_snapshot_mode == HS_SNAPSHOT_RESTOREPOINT)
+
 /* Stores the listener port that this process uses to listen for incoming
  * Interconnect connections from other Motion nodes.
  */

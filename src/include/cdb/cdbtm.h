@@ -192,7 +192,12 @@ typedef enum
 	/**
 	 * On the QE, the two-phase commit has been committed or aborted (second phase complete).
 	 */
-	DTX_CONTEXT_QE_FINISH_PREPARED
+	DTX_CONTEXT_QE_FINISH_PREPARED,
+
+	/**
+	 * Indicating it is a hot standby node that is trying to create restore point mode snapshot.
+	 */
+	DTX_CONTEXT_CREATE_RP_SNAPSHOT
 } DtxContext;
 
 

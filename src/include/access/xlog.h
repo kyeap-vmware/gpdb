@@ -23,6 +23,7 @@
 #include "lib/stringinfo.h"
 #include "storage/buf.h"
 #include "storage/fd.h"
+#include "utils/hsearch.h" /* HTAB */
 #include "utils/pg_crc.h"
 #include "utils/relcache.h"
 #include "cdb/cdbpublic.h"
@@ -94,6 +95,24 @@ typedef enum
 	RECOVERY_TARGET_LSN,
 	RECOVERY_TARGET_IMMEDIATE
 } RecoveryTargetType;
+
+/*
+ * Entry struct of the RestorePointSnapshotHash.
+ * Used for restore point snapshot mode on hot standby.
+ */
+typedef struct RestorePointHashInfoData
+{
+	char rpname[MAXFNAMELEN];
+	TransactionId xmin; /* for fast conflict check */
+} RestorePointHashInfoData;
+
+typedef RestorePointHashInfoData *RestorePointInfo;
+
+extern HTAB *RestorePointSnapshotHash;
+extern void InitRestorePointSnapshotHash(void);
+extern Size RestorePointSnapshotHashSize(void);
+
+extern MemoryContext RpSnapshotMemoryContext;
 
 /*
  * Recovery target TimeLine goal
