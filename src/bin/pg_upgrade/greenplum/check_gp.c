@@ -70,6 +70,9 @@ check_greenplum(void)
 static void
 check_online_expansion(void)
 {
+	if (run_migrate_checks())
+		return;
+
 	bool		expansion = false;
 	int			dbnum;
 
@@ -340,6 +343,9 @@ check_covering_aoindex(void)
 static void
 check_orphaned_toastrels(void)
 {
+	if (run_migrate_checks())
+		return;
+
 	int				dbnum;
 	char			output_path[MAXPGPATH];
 	FILE		   *script = NULL;
@@ -1182,6 +1188,9 @@ check_for_disallowed_pg_operator(void)
 static void
 check_for_ao_matview_with_relfrozenxid(ClusterInfo *cluster)
 {
+	if (run_migrate_checks())
+		return;
+
 	char  output_path[MAXPGPATH];
 	FILE *script = NULL;
 	int   dbnum;

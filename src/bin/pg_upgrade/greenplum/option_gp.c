@@ -15,6 +15,7 @@ typedef struct {
 	bool skip_target_check;
 	bool skip_checks;
 	char *output_dir;
+	bool run_migrate_checks;
 } GreenplumUserOpts;
 
 static GreenplumUserOpts greenplum_user_opts;
@@ -28,6 +29,7 @@ initialize_greenplum_user_options(void)
 	greenplum_user_opts.skip_target_check = false;
 	greenplum_user_opts.skip_checks = false;
 	greenplum_user_opts.output_dir = NULL;
+	greenplum_user_opts.run_migrate_checks = false;
 }
 
 bool
@@ -84,6 +86,10 @@ process_greenplum_option(greenplumOption option)
 			greenplum_user_opts.output_dir = pg_strdup(optarg);
 			break;
 
+		case GREENPLUM_RUN_MIGRATE_CHECKS:
+			greenplum_user_opts.run_migrate_checks = true;
+			break;
+
 		default:
 			return false;
 	}
@@ -124,7 +130,7 @@ get_check_fatal_occurred(void)
 bool
 is_skip_target_check(void)
 {
-	return greenplum_user_opts.skip_target_check;
+	return greenplum_user_opts.skip_target_check || greenplum_user_opts.run_migrate_checks;
 }
 
 bool
@@ -137,4 +143,10 @@ char*
 get_output_dir(void)
 {
 	return greenplum_user_opts.output_dir;
+}
+
+bool
+run_migrate_checks(void)
+{
+	return greenplum_user_opts.run_migrate_checks;
 }

@@ -434,6 +434,9 @@ get_db_infos(ClusterInfo *cluster)
 static void
 get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 {
+	if (run_migrate_checks())
+		return;
+
 	PGconn	   *conn = connectToServer(cluster,
 									   dbinfo->db_name);
 	PGresult   *res;
