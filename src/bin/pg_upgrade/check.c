@@ -65,7 +65,13 @@ fix_path_separator(char *path)
 void
 output_check_banner(bool live_check)
 {
-	if (user_opts.check && live_check)
+	if (migrate_checks())
+	{
+		pg_log(PG_REPORT,
+			   "Performing Migration Validation on Source Cluster\n"
+			   "-----------------------------\n");
+	}
+	else if (user_opts.check && live_check)
 	{
 		pg_log(PG_REPORT,
 			   "Performing Consistency Checks on Old Live Server\n"
@@ -175,7 +181,7 @@ dump_old_cluster:
 	 * While not a check option, we do this now because this is the only time
 	 * the old server is running.
 	 */
-	if (!user_opts.check && is_greenplum_dispatcher_mode())
+	if (!user_opts.check && is_greenplum_dispatcher_mode() && !migrate_checks())
 		generate_old_dump();
 
 	if (!live_check)
@@ -226,7 +232,10 @@ report_clusters_compatible(void)
 			canonicalize_path(cwd);
 
 			pg_log(PG_REPORT, "\n*Some cluster objects are not compatible*\n\npg_upgrade check output files are located in:\n%s\n\n", log_opts.basedir);
-		} else
+		}
+		else if (migrate_checks())
+			pg_log(PG_REPORT, "\n*Cluster is validated for migration to Greenplum 7*\n\n");
+		else
 			pg_log(PG_REPORT, "\n*Clusters are compatible*\n");
 
 		/* stops new cluster */
@@ -235,6 +244,7 @@ report_clusters_compatible(void)
 
 		if (get_check_fatal_occurred())
 			exit(1);
+
 		exit(0);
 	}
 
@@ -748,6 +758,9 @@ create_script_for_old_cluster_deletion(char **deletion_script_file_name)
 static void
 check_is_install_user(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	PGresult   *res;
 	PGconn	   *conn = connectToServer(cluster, "template1");
 
@@ -814,6 +827,9 @@ check_is_install_user(ClusterInfo *cluster)
 static void
 check_proper_datallowconn(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	int			dbnum;
 	PGconn	   *conn_template1;
 	PGresult   *dbres;
@@ -900,6 +916,9 @@ check_proper_datallowconn(ClusterInfo *cluster)
 static void
 check_for_prepared_transactions(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	PGresult   *res;
 	PGconn	   *conn = connectToServer(cluster, "template1");
 
@@ -935,6 +954,9 @@ check_for_prepared_transactions(ClusterInfo *cluster)
 static void
 check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	int			dbnum;
 	FILE	   *script = NULL;
 	char		output_path[MAXPGPATH];
@@ -1019,6 +1041,9 @@ check_for_isn_and_int8_passing_mismatch(ClusterInfo *cluster)
 static void
 check_for_tables_with_oids(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	int			dbnum;
 	FILE	   *script = NULL;
 	char		output_path[MAXPGPATH];
@@ -1100,6 +1125,9 @@ check_for_tables_with_oids(ClusterInfo *cluster)
 static void
 check_for_composite_data_type_usage(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	bool		found;
 	Oid			firstUserOid;
 	char		output_path[MAXPGPATH];
@@ -1161,6 +1189,9 @@ check_for_composite_data_type_usage(ClusterInfo *cluster)
 static void
 check_for_reg_data_type_usage(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	bool		found;
 	char		output_path[MAXPGPATH];
 
@@ -1254,6 +1285,9 @@ check_for_removed_data_type_usage(ClusterInfo *cluster, const char *version,
 static void
 check_for_jsonb_9_4_usage(ClusterInfo *cluster)
 {
+	if (migrate_checks())
+		return;
+
 	char		output_path[MAXPGPATH];
 
 	prep_status("Checking for incompatible \"jsonb\" data type");
