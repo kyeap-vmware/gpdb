@@ -1,0 +1,45 @@
+-- Test to make sure that QD is using gp_segment_configuration file
+-- for dispatch when corresponding guc is set
+
+-- start_matchsubs
+-- m/ERROR:  cannot resolve network address for dbid=.*/
+-- s/ERROR:  cannot resolve network address for dbid=.*/ERROR:  cannot resolve network address for dbid=#####/
+-- end_matchsubs
+
+CREATE OR REPLACE FUNCTION cleanupAllGangs() RETURNS BOOL
+AS '@abs_srcdir@/regress.so', 'cleanupAllGangs' LANGUAGE C;
+
+-- create invalid gp_segment_configuration file
+COPY (SELECT dbid, content, role, preferred_role, mode, status, 99999, 'invalid', 'invalid', datadir FROM gp_segment_configuration WHERE role = 'p')
+    TO '/tmp/test_gp_seg_conf_file' DELIMITER ' ';
+
+-- create valid gp_segment_configuration file
+COPY (SELECT * FROM gp_segment_configuration WHERE role = 'p') TO '/tmp/test_gp_seg_conf_file_valid' DELIMITER ' ';
+
+-- create table, insert some data
+CREATE TABLE test_gp_seg_conf_file AS SELECT generate_series(1,10);
+
+-- set the guc to invalid file and reload
+-- start_ignore
+\! gpconfig -c gp_segment_configuration_file -v "'/tmp/test_gp_seg_conf_file'" --masteronly --skipvalidation
+\! gpstop -u
+-- end_ignore
+
+-- destroy existing cdbgang to force the QD to read the gp_segment_configuration file
+SELECT cleanupAllGangs();
+
+-- run the query - it should fail because of invalid port and hostname
+SELECT count(*) FROM test_gp_seg_conf_file;
+
+-- Replace invalid file with the valid one
+\! mv /tmp/test_gp_seg_conf_file_valid /tmp/test_gp_seg_conf_file
+
+-- dispatch the same query, it should pass because the gp_segment_configuration file is correct now
+SELECT count(*) FROM test_gp_seg_conf_file;
+
+-- remove the guc and reload
+-- start_ignore
+\! gpconfig -r gp_segment_configuration_file --masteronly --skipvalidation
+\! gpstop -u
+-- end_ignore
+\! rm -f /tmp/test_gp_seg_conf_file

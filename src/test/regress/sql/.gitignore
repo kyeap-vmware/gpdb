@@ -29,6 +29,7 @@
 /gpcopy.sql
 /gp_check_files.sql
 /gp_dispatch_keepalives.sql
+/gp_segment_configuration_file.sql
 /gp_tablespace_path_too_long.sql
 /gp_tablespace.sql
 /gp_tablespace_with_faults.sql

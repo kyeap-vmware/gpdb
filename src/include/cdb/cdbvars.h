@@ -94,6 +94,9 @@ extern bool Gp_is_writer;
 extern int gp_session_id;
 #define InvalidGpSessionId	(-1)
 
+/* Load gp_segment_configuration from user specified file instead of catalog */
+extern char *gpSegmentConfigurationFile;
+
 /* The Hostname where this segment's QD is located. This variable is NULL for the QD itself */
 extern char * qdHostname;
 

@@ -360,4 +360,6 @@ test: quicklz_fallback
 # run pg_hba raleted testing
 test: hba_conf
 
+test: gp_segment_configuration_file
+
 # end of tests

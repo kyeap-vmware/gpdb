@@ -376,6 +376,11 @@ void FtsLoop()
 			elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,
 				   "skipping FTS probes due to fts_probe fault");
 		}
+		else if (gpSegmentConfigurationFile != NULL && strcmp(gpSegmentConfigurationFile, "") != 0)
+		{
+			elogif(gp_log_fts >= GPVARS_VERBOSITY_VERBOSE, LOG,
+				   "skipping FTS probes due to hot standby promotion");
+		}
 		else
 		{
 			elogif(gp_log_fts == GPVARS_VERBOSITY_DEBUG, LOG,

@@ -4797,6 +4797,16 @@ struct config_string ConfigureNamesString_gp[] =
 		GP_VERSION,
 		NULL, NULL, NULL
 	},
+	{
+		{"gp_segment_configuration_file", PGC_SIGHUP, DEVELOPER_OPTIONS,
+			gettext_noop("Load gp_segment_configuration from a specified file instead of using the catalog."),
+			NULL,
+			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE | GUC_SUPERUSER_ONLY
+		},
+		&gpSegmentConfigurationFile,
+		"",
+		NULL, NULL, NULL
+	},
 
 #ifdef ENABLE_IC_PROXY
 	{

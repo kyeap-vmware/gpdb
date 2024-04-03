@@ -88,6 +88,7 @@ static int	CdbComponentDatabaseInfoCompare(const void *p1, const void *p2);
 
 static GpSegConfigEntry * readGpSegConfigFromCatalog(int *total_dbs, bool *fully_mirrored);
 static GpSegConfigEntry * readGpSegConfigFromFTSFiles(int *total_dbs, bool *fully_mirrored);
+static GpSegConfigEntry * readGpSegConfigFromFile(char* filepath, int *total_dbs, bool *fully_mirrored);
 
 static void getAddressesForDBid(GpSegConfigEntry *c, int elevel);
 static HTAB *hostPrimaryCountHashTableInit(void);
@@ -97,6 +98,9 @@ static int nextQEIdentifer(CdbComponentDatabases *cdbs);
 static HTAB *segment_ip_cache_htab = NULL;
 
 int numsegmentsFromQD = -1;
+
+/* GPDB specific */
+char *gpSegmentConfigurationFile = NULL;
 
 typedef struct SegIpEntry
 {
@@ -111,17 +115,7 @@ typedef struct HostPrimaryCountEntry
 } HostPrimaryCountEntry;
 
 /*
- * Helper functions for fetching latest gp_segment_configuration outside of
- * the transaction.
- *
- * In phase 2 of 2PC, current xact has been marked to TRANS_COMMIT/ABORT, 
- * COMMIT_PREPARED or ABORT_PREPARED DTM are performed, if they failed,
- * dispather disconnect and destroy all gangs and fetch the latest segment
- * configurations to do RETRY_COMMIT_PREPARED or RETRY_ABORT_PREPARED,
- * however, postgres disallow catalog lookups outside of xacts.
- *
- * readGpSegConfigFromFTSFiles() notify FTS to dump the configs from catalog
- * to a flat file and then read configurations from that file.
+ * Helper function for fetching gp_segment_configuration from a file.
  *
  * Upon successful return, set the number of total db entries (including
  * coordinator and segments) in *total_dbs. Optionally set whether this is a 
@@ -129,7 +123,7 @@ typedef struct HostPrimaryCountEntry
  * segments) in *fully_mirrored.
  */
 static GpSegConfigEntry *
-readGpSegConfigFromFTSFiles(int *total_dbs, bool *fully_mirrored)
+readGpSegConfigFromFile(char* filepath, int *total_dbs, bool *fully_mirrored)
 {
 	FILE	*fd;
 	int		idx = 0;
@@ -144,15 +138,10 @@ readGpSegConfigFromFTSFiles(int *total_dbs, bool *fully_mirrored)
 	char    datadir[MAXPGPATH];
 	char	buf[MAXHOSTNAMELEN * 2 + MAXPGPATH + 32];
 
-	Assert(!IsTransactionState());
-
-	/* notify and wait FTS to finish a probe and update the dump file */
-	FtsNotifyProber();	
-
-	fd = AllocateFile(GPSEGCONFIGDUMPFILE, "r");
+	fd = AllocateFile(filepath, "r");
 
 	if (!fd)
-		elog(ERROR, "could not open gp_segment_configutation dump file:%s:%m", GPSEGCONFIGDUMPFILE);
+		elog(ERROR, "could not open gp_segment_configuration file:%s:%m", filepath);
 
 	configs = palloc0(sizeof (GpSegConfigEntry) * array_size); 
 
@@ -198,6 +187,30 @@ readGpSegConfigFromFTSFiles(int *total_dbs, bool *fully_mirrored)
 	if (fully_mirrored)
 		*fully_mirrored = num_primaries == num_mirrors;
 	return configs;
+}
+
+/*
+ * Helper functions for fetching latest gp_segment_configuration outside of
+ * the transaction.
+ *
+ * In phase 2 of 2PC, current xact has been marked to TRANS_COMMIT/ABORT,
+ * COMMIT_PREPARED or ABORT_PREPARED DTM are performed, if they failed,
+ * dispather disconnect and destroy all gangs and fetch the latest segment
+ * configurations to do RETRY_COMMIT_PREPARED or RETRY_ABORT_PREPARED,
+ * however, postgres disallow catalog lookups outside of xacts.
+ *
+ * readGpSegConfigFromFTSFiles() notify FTS to dump the configs from catalog
+ * to a flat file and then read configurations from that file.
+ */
+static GpSegConfigEntry *
+readGpSegConfigFromFTSFiles(int *total_dbs, bool *fully_mirrored)
+{
+	Assert(!IsTransactionState());
+
+	/* notify and wait for FTS to finish a probe and update the dump file */
+	FtsNotifyProber();
+
+	return readGpSegConfigFromFile(GPSEGCONFIGDUMPFILE, total_dbs, fully_mirrored);
 }
 
 /*
@@ -395,7 +408,15 @@ getCdbComponentInfo(void)
 
 	HTAB	   *hostPrimaryCountHash = hostPrimaryCountHashTableInit();
 
-	if (IsTransactionState())
+	/* If the gp_segment_configuration_file GUC is set, load from there. */
+	if (gpSegmentConfigurationFile != NULL && strcmp(gpSegmentConfigurationFile, "") != 0)
+	{
+		if (!RecoveryInProgress())
+			elog(LOG, "loading gp_segment_configuration from file '%s' while in production", gpSegmentConfigurationFile);
+
+		configs = readGpSegConfigFromFile(gpSegmentConfigurationFile, &total_dbs, &fully_mirrored);
+	}
+	else if (IsTransactionState())
 		configs = readGpSegConfigFromCatalog(&total_dbs, &fully_mirrored);
 	else
 		configs = readGpSegConfigFromFTSFiles(&total_dbs, &fully_mirrored);
