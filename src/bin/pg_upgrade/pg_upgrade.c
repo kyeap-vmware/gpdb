@@ -116,6 +116,13 @@ main(int argc, char **argv)
 	if(!is_skip_target_check())
 		adjust_data_dir(&new_cluster);
 
+	output_dir = get_output_dir();
+	if (is_skip_target_check() && output_dir == NULL)
+		pg_fatal("Must set log location with --output-dir when running checks that does not require target cluster.\n");
+
+	if (is_skip_target_check() && output_dir != NULL)
+		new_cluster.pgdata = get_output_dir();
+
 	/*
 	 * Set mask based on PGDATA permissions, needed for the creation of the
 	 * output directories with correct permissions.
@@ -139,7 +146,7 @@ main(int argc, char **argv)
 	 * make_outputdirs_gp() when the user knows the exact directory to put the
 	 * files and logs that pg_upgrade generates.
 	 */
-	if ((output_dir = get_output_dir()) != NULL)
+	if (output_dir != NULL)
 		make_outputdirs_gp(output_dir);
 	else
 		make_outputdirs(new_cluster.pgdata);
