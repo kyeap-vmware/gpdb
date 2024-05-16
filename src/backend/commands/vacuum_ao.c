@@ -120,6 +120,7 @@
 #include "access/appendonlywriter.h"
 #include "access/appendonly_compaction.h"
 #include "access/genam.h"
+#include "access/heapam_xlog.h"
 #include "access/multixact.h"
 #include "access/visibilitymap.h"
 #include "access/xact.h"
@@ -467,11 +468,32 @@ ao_vacuum_rel_recycle_dead_segments(Relation onerel, VacuumParams *params,
 	Bitmapset	*dead_segs;
 	int			options = params->options;
 	bool		need_drop;
+	TransactionId	latestToBeRemovedXid = InvalidTransactionId;
 
-	dead_segs = AppendOptimizedCollectDeadSegments(onerel);
+	dead_segs = AppendOptimizedCollectDeadSegments(onerel, &latestToBeRemovedXid);
 	need_drop = !bms_is_empty(dead_segs);
 	if (need_drop)
 	{
+		/*
+		 * Emit latestRemovedXid in WAL record so a hot standby can get the
+		 * snapshot conflict and resolve it.
+		 *
+		 * This needs to placed before vacuuming index and truncating segments,
+		 * because the latter's WALs do not contain latestRemovedXid info so
+		 * they won't conflict with standby query, which is bad and can cause
+		 * inconsistent query results.
+		 *
+		 * The WAL type XLOG_HEAP2_CLEANUP_INFO we are inserting here might
+		 * seem a little misleading, but snapshot conflict works w/o regards
+		 * to the table type. For AO/CO tables, we need the exact same 
+		 * information as heap tables (latestRemovedXid and database id).
+		 * If in future we do want to add extra information for AO/CO, we
+		 * can add a new WAL type for it at that time.
+		 */
+		Assert(TransactionIdIsValid(latestToBeRemovedXid));
+		if (RelationNeedsWAL(onerel) && XLogIsNeeded())
+			log_heap_cleanup_info(onerel->rd_node, latestToBeRemovedXid);
+
 		/*
 		 * Vacuum indexes only when we do find AWAITING_DROP segments.
 		 *

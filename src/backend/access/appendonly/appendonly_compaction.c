@@ -529,9 +529,12 @@ AppendOnlySegmentFileFullCompaction(Relation aorel,
  * 
  * Acquire AccessShareLock with cutoff_xid to scan and collect dead
  * segments.
+ *
+ * Upon return, latestToBeRemovedXid is set to the highest among all aoseg rows
+ * in the AWAITING_DROP state, if there are any (InvalidTransactionId otherwise).
  */
 Bitmapset *
-AppendOptimizedCollectDeadSegments(Relation aorel)
+AppendOptimizedCollectDeadSegments(Relation aorel, TransactionId *latestToBeRemovedXid)
 {
 	Relation	pg_aoseg_rel;
 	TupleDesc	pg_aoseg_dsc;
@@ -543,6 +546,9 @@ AppendOptimizedCollectDeadSegments(Relation aorel)
 	Bitmapset	*dead_segs = NULL;
 
 	Assert(RelationStorageIsAO(aorel));
+	Assert(latestToBeRemovedXid);
+
+	*latestToBeRemovedXid = InvalidTransactionId;
 
 	GetAppendOnlyEntryAuxOids(aorel,
 							  &segrelid, NULL, NULL);
@@ -626,6 +632,9 @@ AppendOptimizedCollectDeadSegments(Relation aorel)
 		}
 		if (!visible_to_all)
 			continue;
+
+		if (*latestToBeRemovedXid == InvalidTransactionId || TransactionIdPrecedes(*latestToBeRemovedXid, xmin))
+			*latestToBeRemovedXid = xmin;
 
 		/* collect dead segnos for dropping */
 		dead_segs = bms_add_member(dead_segs, segno);
