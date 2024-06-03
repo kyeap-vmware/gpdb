@@ -434,8 +434,21 @@ get_db_infos(ClusterInfo *cluster)
 static void
 get_rel_infos(ClusterInfo *cluster, DbInfo *dbinfo)
 {
-	if (migrate_checks())
+	/*
+	 * GPDB: The results of runnning get_rel_infos on the old_cluster is a list
+	 * of relation info used primarily to compare old and new cluster relation
+	 * OIDs when relfilenode mapping of old to new cluster is done in
+	 * gen_db_file_maps. We can get a performance enhancement by skipping this
+	 * function when the --check flag is used because we know pg_upgrade will
+	 * exit before that function is called. This will cause print_db_infos to
+	 * not print out relation info correctly when verbose logging is used.
+	 */
+	if (user_opts.check)
+	{
+		dbinfo->rel_arr.rels = NULL;
+		dbinfo->rel_arr.nrels = 0;
 		return;
+	}
 
 	PGconn	   *conn = connectToServer(cluster,
 									   dbinfo->db_name);
