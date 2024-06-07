@@ -9348,6 +9348,7 @@ get_rule_expr(Node *node, deparse_context *context,
 						ListCell *cell;
 
 						appendStringInfoString(buf, " WITH (");
+						sep = "";
 						if (elem->accessMethod)
 						{
 							if (pg_strcasecmp(elem->accessMethod, "ao_row") == 0)
@@ -9364,11 +9365,13 @@ get_rule_expr(Node *node, deparse_context *context,
 						foreach (cell, elem->options)
 						{
 							DefElem *el = lfirst_node(DefElem, cell);
-							char *arg;
 
 							appendStringInfoString(buf, sep);
 							appendStringInfo(buf, "%s=", el->defname);
-							appendStringInfo(buf, "%s", arg = defGetString(el));
+							if (strcmp(el->defname, "tablename") == 0)
+								simple_quote_literal(buf, defGetString(el));
+							else
+								appendStringInfo(buf, "%s", defGetString(el));
 							sep = ", ";
 						}
 						appendStringInfoChar(buf, ')');

@@ -887,3 +887,66 @@ ALTER TABLE set_templ_test SET SUBPARTITION TEMPLATE(
     subpartition r2 START (date '2003-01-01') END (date '2005-01-01') EVERY (interval '1 year')
     );
 ERROR:  expressions in partition key not supported in legacy GPDB partition syntax
+-- test pg_get_expr WITH tablename
+CREATE TABLE public.sales0 (
+    trans_id integer,
+    date date,
+    region text
+)
+PARTITION BY RANGE(date) DISTRIBUTED BY (trans_id);
+CREATE TABLE public.sales0_1_prt_2 (
+    trans_id integer,
+    date date,
+    region text
+)
+PARTITION BY LIST (region) DISTRIBUTED BY (trans_id);
+ALTER TABLE ONLY public.sales0 ATTACH PARTITION public.sales0_1_prt_2 FOR VALUES FROM ('2023-01-01'::date) TO ('2023-05-01'::date);
+CREATE TABLE public.sales0_1_prt_2_2_prt_europe ( trans_id integer, date date, region text)
+DISTRIBUTED BY (trans_id);
+ALTER TABLE ONLY public.sales0_1_prt_2 ATTACH PARTITION public.sales0_1_prt_2_2_prt_europe FOR VALUES IN ('europe'::text);
+CREATE TABLE public.sales0_1_prt_2_2_prt_asia (
+        trans_id integer,
+        date date,
+        region text
+        )
+DISTRIBUTED BY (trans_id);
+ALTER TABLE ONLY public.sales0_1_prt_2 ATTACH PARTITION public.sales0_1_prt_2_2_prt_asia FOR VALUES IN ('asia'::text);
+ALTER TABLE public.sales0
+SET SUBPARTITION TEMPLATE
+(
+    SUBPARTITION usa VALUES('usa') WITH (tablename='sales0'),
+    SUBPARTITION asia VALUES('asia') WITH (tablename='sales0'),
+    SUBPARTITION europe VALUES('europe') WITH (tablename='sales0'),
+    DEFAULT SUBPARTITION other_regions  WITH (tablename='sales0')
+);
+SELECT pg_get_expr(template, relid) from gp_partition_template where relid='sales0'::regclass::oid;
+                                                                                                                                 pg_get_expr                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SUBPARTITION TEMPLATE(DEFAULT SUBPARTITION other_regions WITH (tablename='sales0'), SUBPARTITION usa VALUES ('usa') WITH (tablename='sales0'), SUBPARTITION asia VALUES ('asia') WITH (tablename='sales0'), SUBPARTITION europe VALUES ('europe') WITH (tablename='sales0'))
+(1 row)
+
+ALTER TABLE ONLY public.sales0 DETACH PARTITION public.sales0_1_prt_2;
+DROP TABLE sales0;
+CREATE TABLE public."sales'0" (
+    trans_id integer,
+    date date,
+    region text
+)
+PARTITION BY RANGE(date) DISTRIBUTED BY (trans_id);
+ALTER TABLE ONLY public."sales'0" ATTACH PARTITION public.sales0_1_prt_2 FOR VALUES FROM ('2023-01-01'::date) TO ('2023-05-01'::date);
+ALTER TABLE public."sales'0"
+SET SUBPARTITION TEMPLATE
+(
+    SUBPARTITION usa VALUES('usa') WITH (tablename='sales''0'),
+    SUBPARTITION asia VALUES('asia') WITH (tablename='sales''0'),
+    SUBPARTITION europe VALUES('europe') WITH (tablename='sales''0'),
+    DEFAULT SUBPARTITION other_regions  WITH (tablename='sales''0')
+);
+SELECT pg_get_expr(template, relid) from gp_partition_template where relid='sales''0'::regclass::oid;
+                                                                                                                                     pg_get_expr                                                                                                                                      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ SUBPARTITION TEMPLATE(DEFAULT SUBPARTITION other_regions WITH (tablename='sales''0'), SUBPARTITION usa VALUES ('usa') WITH (tablename='sales''0'), SUBPARTITION asia VALUES ('asia') WITH (tablename='sales''0'), SUBPARTITION europe VALUES ('europe') WITH (tablename='sales''0'))
+(1 row)
+
+DROP TABLE "sales'0";
+-- end test pg_get_expr
