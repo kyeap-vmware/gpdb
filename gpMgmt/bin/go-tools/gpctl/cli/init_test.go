@@ -4,26 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpctl/cli"
 	"github.com/greenplum-db/gpdb/gpservice/constants"
-
-	"github.com/golang/mock/gomock"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
 	"github.com/greenplum-db/gpdb/gpservice/idl/mock_idl"
-	//"github.com/greenplum-db/gpdb/gpservice/internal/hub"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var (

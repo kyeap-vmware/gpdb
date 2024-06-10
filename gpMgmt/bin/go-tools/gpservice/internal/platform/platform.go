@@ -67,11 +67,11 @@ func NewPlatform(os string) (Platform, error) {
 
 type Platform interface {
 	CreateServiceDir(hostnames []string, gpHome string) error
-	GenerateServiceFileContents(process string, gpHome string, serviceName string) string
+	GenerateServiceFileContents(process, gpHome, serviceName, serviceFilepath string) string
 	ReloadHubService(servicePath string) error
 	ReloadAgentService(gpHome string, hostList []string, servicePath string) error
-	CreateAndInstallHubServiceFile(gpHome string, serviceName string) error
-	CreateAndInstallAgentServiceFile(hostnames []string, gpHome string, serviceName string) error
+	CreateAndInstallHubServiceFile(gpHome, serviceName, serviceFilepath string) error
+	CreateAndInstallAgentServiceFile(hostnames []string, gpHome, serviceName, serviceFilepath string) error
 	GetStartHubCommand(serviceName string) *exec.Cmd
 	GetStartAgentCommandString(serviceName string) []string
 	RemoveHubService(serviceName string) error
@@ -126,15 +126,15 @@ func WriteServiceFile(filename string, contents string) error {
 	return nil
 }
 
-func (p GpPlatform) GenerateServiceFileContents(process string, gpHome string, serviceName string) string {
+func (p GpPlatform) GenerateServiceFileContents(process, gpHome, serviceName, serviceFilepath string) string {
 	if p.OS == constants.PlatformDarwin {
-		return GenerateDarwinServiceFileContents(process, gpHome, serviceName)
+		return GenerateDarwinServiceFileContents(process, gpHome, serviceName, serviceFilepath)
 	}
 
-	return GenerateLinuxServiceFileContents(process, gpHome, serviceName)
+	return GenerateLinuxServiceFileContents(process, gpHome, serviceName, serviceFilepath)
 }
 
-func GenerateDarwinServiceFileContents(process string, gpHome string, serviceName string) string {
+func GenerateDarwinServiceFileContents(process, gpHome, serviceName, serviceFilepath string) string {
 	template := `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -145,32 +145,27 @@ func GenerateDarwinServiceFileContents(process string, gpHome string, serviceNam
     <array>
         <string>%[2]s/bin/gpservice</string>
         <string>%[1]s</string>
+        <string>--config-file</string>
+        <string>%[4]s</string>
     </array>
     <key>StandardOutPath</key>
     <string>/tmp/grpc_%[1]s.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/grpc_%[1]s.log</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>%[4]s</string>
-        <key>GPHOME</key>
-        <string>%[2]s</string>
-    </dict>
 </dict>
 </plist>
 `
-	return fmt.Sprintf(template, process, gpHome, serviceName, os.Getenv("PATH"))
+	return fmt.Sprintf(template, process, gpHome, serviceName, serviceFilepath)
 }
 
-func GenerateLinuxServiceFileContents(process string, gpHome string, serviceName string) string {
+func GenerateLinuxServiceFileContents(process, gpHome, serviceName, serviceFilepath string) string {
 	template := `[Unit]
 Description=Greenplum Database management utility %[1]s
 
 [Service]
 Type=simple
 Environment=GPHOME=%[2]s
-ExecStart=%[2]s/bin/gpservice %[1]s
+ExecStart=%[2]s/bin/gpservice %[1]s --config-file %[4]s
 Restart=on-failure
 StandardOutput=file:/tmp/grpc_%[1]s.log
 StandardError=file:/tmp/grpc_%[1]s.log
@@ -179,11 +174,11 @@ StandardError=file:/tmp/grpc_%[1]s.log
 Alias=%[3]s_%[1]s.service
 WantedBy=default.target
 `
-	return fmt.Sprintf(template, process, gpHome, serviceName)
+	return fmt.Sprintf(template, process, gpHome, serviceName, serviceFilepath)
 }
 
-func (p GpPlatform) CreateAndInstallHubServiceFile(gpHome string, serviceName string) error {
-	hubServiceContents := p.GenerateServiceFileContents("hub", gpHome, serviceName)
+func (p GpPlatform) CreateAndInstallHubServiceFile(gpHome, serviceName, serviceFilepath string) error {
+	hubServiceContents := p.GenerateServiceFileContents("hub", gpHome, serviceName, serviceFilepath)
 	hubServiceFilePath := filepath.Join(p.ServiceDir, fmt.Sprintf("%s_hub.%s", serviceName, p.ServiceExt))
 	err := WriteServiceFile(hubServiceFilePath, hubServiceContents)
 	if err != nil {
@@ -249,7 +244,7 @@ func (p GpPlatform) ReloadAgentService(gpHome string, hostnames []string, servic
 
 	gpsshCmd := &greenplum.GpSSH{
 		Hostnames: hostnames,
-		Command:   fmt.Sprintf("%s daemon-reload", p.UserArg),
+		Command:   fmt.Sprintf("%s %s daemon-reload", p.ServiceCmd, p.UserArg),
 	}
 	out, err := utils.RunGpSourcedCommand(gpsshCmd, gpHome)
 	if err != nil {
@@ -259,8 +254,8 @@ func (p GpPlatform) ReloadAgentService(gpHome string, hostnames []string, servic
 	return nil
 }
 
-func (p GpPlatform) CreateAndInstallAgentServiceFile(hostnames []string, gpHome string, serviceName string) error {
-	agentServiceContents := p.GenerateServiceFileContents("agent", gpHome, serviceName)
+func (p GpPlatform) CreateAndInstallAgentServiceFile(hostnames []string, gpHome, serviceName, serviceFilepath string) error {
+	agentServiceContents := p.GenerateServiceFileContents("agent", gpHome, serviceName, serviceFilepath)
 	localAgentServiceFilePath := fmt.Sprintf("./%s_agent.%s", serviceName, p.ServiceExt)
 	err := WriteServiceFile(localAgentServiceFilePath, agentServiceContents)
 	if err != nil {

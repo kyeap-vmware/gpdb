@@ -2,11 +2,7 @@ package cli_test
 
 import (
 	"errors"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
-	"os"
-	"os/exec"
-	"strings"
+	"fmt"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -17,6 +13,8 @@ import (
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 )
 
 func TestStartCmd(t *testing.T) {
@@ -99,33 +97,29 @@ func TestStartCmd(t *testing.T) {
 	})
 
 	t.Run("returns error when fails to start the hub service", func(t *testing.T) {
-		testhelper.SetupTestLogger()
+		_, _, logfile:= testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Failure)
+		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StartCmd())
-		var expectedErr *exec.ExitError
-		if !errors.As(err, &expectedErr) {
-			t.Fatalf("got %T, want %T", err, expectedErr)
-		}
+		testutils.ExecuteCobraCommand(t, cli.StartCmd())
 
-		expectedErrPrefix := "failed to start hub service:"
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := `\[ERROR\]:-failed to start hub service:`
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 
 	t.Run("returns error when fails to start the agent service", func(t *testing.T) {
-		testhelper.SetupTestLogger()
+		_, _, logfile:= testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
+		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
 		ctrl := gomock.NewController(t)
@@ -141,31 +135,17 @@ func TestStartCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConnectToHub()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StartCmd())
-		if !errors.Is(err, expectedErr) {
-			t.Fatalf("got %#v, want %#v", err, expectedErr)
-		}
+		testutils.ExecuteCobraCommand(t, cli.StartCmd())
 
-		expectedErrPrefix := "failed to start agent service:"
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := fmt.Sprintf(`\[ERROR\]:-failed to start agent service: %v`, expectedErr)
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 
 	t.Run("shows the status when run in verbose mode", func(t *testing.T) {
 		testhelper.SetupTestLogger()
-		config := testutils.CreateDummyServiceConfig(t)
 
-		resetConf := cli.SetConf(config)
+		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
-		tempConfFile, err := os.CreateTemp("/tmp", "")
-
-		if err != nil {
-			t.Fatalf("error creating temp file: %v", err)
-		}
-		defer os.Remove(tempConfFile.Name())
-		cli.ConfigFilepath = tempConfFile.Name()
-		config.Write(tempConfFile.Name())
 
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		utils.System.GetHostName = func() (name string, err error) {
@@ -196,7 +176,7 @@ func TestStartCmd(t *testing.T) {
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		_, err = testutils.ExecuteCobraCommand(t, cli.RootCommand(), "start", "--verbose", "--config-file", tempConfFile.Name())
+		_, err := testutils.ExecuteCobraCommand(t, cli.RootCommand(), "start", "--verbose")
 		writer.Close()
 		stdout := <-buffer
 

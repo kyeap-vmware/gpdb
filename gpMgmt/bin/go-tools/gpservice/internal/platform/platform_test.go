@@ -116,7 +116,7 @@ func TestGenerateServiceFileContents(t *testing.T) {
 	t.Run("GenerateServiceFileContents successfully generates contents for darwin", func(t *testing.T) {
 		platform := GetPlatform(t, constants.PlatformDarwin)
 
-		expected := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
+		expected := `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -126,22 +126,17 @@ func TestGenerateServiceFileContents(t *testing.T) {
     <array>
         <string>/test/bin/gpservice</string>
         <string>hub</string>
+        <string>--config-file</string>
+        <string>/path/to/service/file</string>
     </array>
     <key>StandardOutPath</key>
     <string>/tmp/grpc_hub.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/grpc_hub.log</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>%[1]s</string>
-        <key>GPHOME</key>
-        <string>/test</string>
-    </dict>
 </dict>
 </plist>
-`, os.Getenv("PATH"))
-		contents := platform.GenerateServiceFileContents("hub", "/test", "gpservice")
+`
+		contents := platform.GenerateServiceFileContents("hub", "/test", "gpservice", "/path/to/service/file")
 		if contents != expected {
 			t.Fatalf("got %q, want %q", contents, expected)
 		}
@@ -156,7 +151,7 @@ Description=Greenplum Database management utility hub
 [Service]
 Type=simple
 Environment=GPHOME=/test
-ExecStart=/test/bin/gpservice hub
+ExecStart=/test/bin/gpservice hub --config-file /path/to/service/file
 Restart=on-failure
 StandardOutput=file:/tmp/grpc_hub.log
 StandardError=file:/tmp/grpc_hub.log
@@ -165,7 +160,7 @@ StandardError=file:/tmp/grpc_hub.log
 Alias=gpservice_hub.service
 WantedBy=default.target
 `
-		contents := platform.GenerateServiceFileContents("hub", "/test", "gpservice")
+		contents := platform.GenerateServiceFileContents("hub", "/test", "gpservice", "/path/to/service/file")
 		if contents != expected {
 			t.Fatalf("got %q, want %q", contents, expected)
 		}
@@ -319,7 +314,7 @@ func TestCreateAndInstallHubServiceFile(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest")
+		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest", "/path/to/service/file")
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -335,7 +330,7 @@ func TestCreateAndInstallHubServiceFile(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest")
+		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest", "/path/to/service/file")
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("got %q, want %q", err, expectedErr)
 		}
@@ -352,7 +347,7 @@ func TestCreateAndInstallHubServiceFile(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Failure)
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest")
+		err := platform.CreateAndInstallHubServiceFile("gpHome", "gptest", "/path/to/service/file")
 		var expectedErr *exec.ExitError
 		if !errors.As(err, &expectedErr) {
 			t.Errorf("got %T, want %T", err, expectedErr)
@@ -379,7 +374,7 @@ func TestCreateAndInstallAgentServiceFile(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest")
+		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest", "/path/to/service/file")
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -402,7 +397,7 @@ func TestCreateAndInstallAgentServiceFile(t *testing.T) {
 		}
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest")
+		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest", "/path/to/service/file")
 		var expectedErr *exec.ExitError
 		if !errors.As(err, &expectedErr) {
 			t.Errorf("got %T, want %T", err, expectedErr)
@@ -423,7 +418,7 @@ func TestCreateAndInstallAgentServiceFile(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest")
+		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest", "/path/to/service/file")
 		expectedErr := os.ErrPermission
 		if !errors.Is(err, expectedErr) {
 			t.Fatalf("got %q, want %q", err, expectedErr)
@@ -447,7 +442,7 @@ func TestCreateAndInstallAgentServiceFile(t *testing.T) {
 		}
 		defer utils.ResetSystemFunctions()
 
-		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest")
+		err := platform.CreateAndInstallAgentServiceFile([]string{"host1", "host2"}, "gpHome", "gptest", "/path/to/service/file")
 		var expectedErr *exec.ExitError
 		if !errors.As(err, &expectedErr) {
 			t.Errorf("got %T, want %T", err, expectedErr)

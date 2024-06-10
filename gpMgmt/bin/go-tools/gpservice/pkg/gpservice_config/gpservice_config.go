@@ -3,10 +3,11 @@ package gpservice_config
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"net"
 	"os"
 	"strconv"
+
+	"github.com/greenplum-db/gp-common-go-libs/gplog"
 
 	"github.com/greenplum-db/gpdb/gpservice/idl"
 	"github.com/greenplum-db/gpdb/gpservice/idl/mock_idl"
@@ -113,15 +114,17 @@ func copyConfigFileToAgents(hostnames []string, filepath, gpHome string) error {
 }
 
 func connectToHubFunc(conf *Config) (idl.HubClient, error) {
+	errPrefix := fmt.Sprintf("could not connect to hub on port %d", conf.HubPort)
+
 	credentials, err := conf.Credentials.LoadClientCredentials()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	address := net.JoinHostPort("localhost", strconv.Itoa(conf.HubPort))
 	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials))
 	if err != nil {
-		return nil, fmt.Errorf("could not connect to hub on port %d: %w", conf.HubPort, err)
+		return nil, fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	return idl.NewHubClient(conn), nil

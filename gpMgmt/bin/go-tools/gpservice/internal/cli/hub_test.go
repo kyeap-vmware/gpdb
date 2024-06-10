@@ -2,12 +2,12 @@ package cli_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"net"
-	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 )
@@ -27,6 +27,8 @@ func TestHubCmd(t *testing.T) {
 	})
 
 	t.Run("returns error when fails to start the hub server", func(t *testing.T) {
+		_, _, logfile := testhelper.SetupTestLogger()
+
 		port, cleanup := testutils.GetAndListenOnPort(t)
 		defer cleanup()
 
@@ -35,15 +37,12 @@ func TestHubCmd(t *testing.T) {
 		resetConf := cli.SetConf(config)
 		defer resetConf()
 
-		var expectedErr *net.OpError
-		_, err := testutils.ExecuteCobraCommand(t, cli.HubCmd())
-		if !errors.As(err, &expectedErr) {
-			t.Fatalf("got %T, want %T", err, err)
-		}
+		utils.System.OSExit = func(code int) {}
+		defer utils.ResetSystemFunctions()
 
-		expectedErrPrefix := fmt.Sprintf("could not listen on port %d:", port)
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		testutils.ExecuteCobraCommand(t, cli.HubCmd())
+
+		expected := fmt.Sprintf(`\[ERROR\]:-could not listen on port %d:`, port)
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 }

@@ -2,12 +2,13 @@ package cli_test
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"testing"
+
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
-	"os"
-	"os/exec"
-	"strings"
-	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
@@ -71,6 +72,8 @@ Agent     sdw1      running   123       5H
 	})
 
 	t.Run("errors out when not able to display the hub status", func(t *testing.T) {
+		_, _, logfile:= testhelper.SetupTestLogger()
+		
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
@@ -78,24 +81,18 @@ Agent     sdw1      running   123       5H
 		utils.System.GetHostName = func() (name string, err error) {
 			return "cdw", err
 		}
+		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StatusCmd())
+		testutils.ExecuteCobraCommand(t, cli.StatusCmd())
 		writer.Close()
 		stdout := <-buffer
 
-		var expectedErr *exec.ExitError
-		if !errors.As(err, &expectedErr) {
-			t.Errorf("got %T, want %T", err, expectedErr)
-		}
-
-		expectedErrPrefix := "failed to get service status:"
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := `\[ERROR\]:-failed to get service status:`
+		testutils.AssertLogMessage(t, logfile, expected)
 
 		expectedStdout := ""
 		if stdout != expectedStdout {
@@ -104,6 +101,8 @@ Agent     sdw1      running   123       5H
 	})
 
 	t.Run("errors out when not able to display the agent status", func(t *testing.T) {
+		_, _, logfile:= testhelper.SetupTestLogger()
+		
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
@@ -111,6 +110,7 @@ Agent     sdw1      running   123       5H
 		utils.System.GetHostName = func() (name string, err error) {
 			return "cdw", err
 		}
+		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
 		ctrl := gomock.NewController(t)
@@ -128,13 +128,12 @@ Agent     sdw1      running   123       5H
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StatusCmd())
+		testutils.ExecuteCobraCommand(t, cli.StatusCmd())
 		writer.Close()
 		stdout := <-buffer
 
-		if !errors.Is(err, expectedErr) {
-			t.Fatalf("got %#v, want %#v", err, expectedErr)
-		}
+		expected := fmt.Sprintf(`\[ERROR\]:-%v`, expectedErr)
+		testutils.AssertLogMessage(t, logfile, expected)
 
 		expectedStdout := `ROLE      HOST      STATUS    PID       UPTIME
 Hub       cdw       running   83008     10H

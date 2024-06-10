@@ -39,7 +39,12 @@ func InitCmd() *cobra.Command {
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize gpservice as a systemd service",
-		RunE:  RunConfigure,
+		Run: func(cmd *cobra.Command, args []string) {
+			err := RunConfigure(cmd)
+			if err != nil {
+				utils.LogErrorAndExit(err, 1)
+			}
+		},
 	}
 
 	viper.AutomaticEnv()
@@ -73,14 +78,14 @@ func InitCmd() *cobra.Command {
 	return initCmd
 }
 
-func RunConfigure(cmd *cobra.Command, args []string) (err error) {
+func RunConfigure(cmd *cobra.Command) error {
 	if gpHome == "" {
 		return fmt.Errorf("not a valid gpHome found\n")
 	}
 
 	// Regenerate default flag values if a custom GPHOME or username is passed
 	if !cmd.Flags().Lookup("config-file").Changed {
-		ConfigFilepath = filepath.Join(gpHome, constants.ConfigFileName)
+		configFilepath = filepath.Join(gpHome, constants.ConfigFileName)
 	}
 
 	if !cmd.Flags().Lookup("host").Changed && !cmd.Flags().Lookup("hostfile").Changed {
@@ -92,7 +97,7 @@ func RunConfigure(cmd *cobra.Command, args []string) (err error) {
 	}
 
 	// Convert file/directory paths to absolute path before writing to service configuration file
-	err = resolveAbsolutePaths()
+	err := resolveAbsolutePaths()
 	if err != nil {
 		return err
 	}
@@ -113,7 +118,7 @@ func RunConfigure(cmd *cobra.Command, args []string) (err error) {
 		ServerCertPath: serverCertPath,
 		ServerKeyPath:  serverKeyPath,
 	}
-	err = config.Create(ConfigFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials)
+	err = config.Create(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials)
 	if err != nil {
 		return err
 	}
@@ -123,12 +128,12 @@ func RunConfigure(cmd *cobra.Command, args []string) (err error) {
 		return err
 	}
 
-	err = platform.CreateAndInstallHubServiceFile(gpHome, serviceName)
+	err = platform.CreateAndInstallHubServiceFile(gpHome, serviceName, configFilepath)
 	if err != nil {
 		return err
 	}
 
-	err = platform.CreateAndInstallAgentServiceFile(hostnames, gpHome, serviceName)
+	err = platform.CreateAndInstallAgentServiceFile(hostnames, gpHome, serviceName, configFilepath)
 	if err != nil {
 		return err
 	}

@@ -18,29 +18,40 @@ func StatusCmd() *cobra.Command {
 	statusCmd := &cobra.Command{
 		Use:   "status",
 		Short: "Display status of hub and agent services",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var statuses []*idl.ServiceStatus
-
-			hubStatus, err := getHubStatus(conf)
+		Args:  cobra.NoArgs,
+		Example: `To display the status of hub and agent services
+$ gpservice status
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			err := runStatusCmd()
 			if err != nil {
-				return err
+				utils.LogErrorAndExit(err, 1)
 			}
-			statuses = append(statuses, hubStatus...)
-
-			agentStatus, err := getAgentStatus(conf)
-			if err != nil {
-				displayServiceStatus(os.Stdout, statuses)
-				return err
-			}
-			statuses = append(statuses, agentStatus...)
-
-			displayServiceStatus(os.Stdout, statuses)
-
-			return nil
 		},
 	}
 
 	return statusCmd
+}
+
+func runStatusCmd() error {
+	var statuses []*idl.ServiceStatus
+
+	hubStatus, err := getHubStatus(conf)
+	if err != nil {
+		return err
+	}
+	statuses = append(statuses, hubStatus...)
+
+	agentStatus, err := getAgentStatus(conf)
+	if err != nil {
+		displayServiceStatus(os.Stdout, statuses)
+		return err
+	}
+	statuses = append(statuses, agentStatus...)
+
+	displayServiceStatus(os.Stdout, statuses)
+
+	return nil
 }
 
 func getHubStatus(conf *gpservice_config.Config) ([]*idl.ServiceStatus, error) {
@@ -64,6 +75,9 @@ func getAgentStatus(conf *gpservice_config.Config) ([]*idl.ServiceStatus, error)
 
 	reply, err := client.StatusAgents(context.Background(), &idl.StatusAgentsRequest{})
 	if err != nil {
+		if utils.IsGrpcServerUnavailableErr(err) {
+			return nil, utils.NewHelpErr(fmt.Errorf("failed to get agent status: %w", err), "Hub service must be running to get the agent status. If it is not, start the services using the 'gpservice start' command.")
+		}
 		return nil, err
 	}
 

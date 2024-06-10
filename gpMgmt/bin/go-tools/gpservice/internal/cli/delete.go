@@ -48,7 +48,7 @@ func DeleteServices(conf *gpservice_config.Config) error {
 	}
 
 	// remove gpservice.conf from hub and agents using ssh
-	err = conf.Remove(ConfigFilepath)
+	err = conf.Remove(configFilepath)
 	if err != nil {
 		return err
 	}

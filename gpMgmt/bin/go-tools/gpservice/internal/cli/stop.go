@@ -3,14 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc/codes"
-	grpcStatus "google.golang.org/grpc/status"
 )
 
 var (
@@ -23,13 +21,20 @@ func StopCmd() *cobra.Command {
 	stopCmd := &cobra.Command{
 		Use:   "stop",
 		Short: "Stop hub and agent services",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if stopHub {
-				return stopHubService(conf)
-			} else if stopAgent {
-				return stopAgentService(conf)
-			} else {
-				return StopServices(conf)
+		Args:  cobra.NoArgs,
+		Example: `Stop the hub and agent services
+$ gpservice stop
+
+To stop only the hub service
+$ gpservice stop --hub
+
+To stop only the agent service
+$ gpservice stop --agent
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			err := runStopCmd(stopHub, stopAgent)
+			if err != nil {
+				utils.LogErrorAndExit(err, 1)
 			}
 		},
 	}
@@ -38,6 +43,16 @@ func StopCmd() *cobra.Command {
 	stopCmd.Flags().BoolVar(&stopAgent, "agent", false, "Stop only the agent service. Hub service should already be running")
 
 	return stopCmd
+}
+
+func runStopCmd(stopHub, stopAgent bool) error {
+	if stopHub {
+		return stopHubService(conf)
+	} else if stopAgent {
+		return stopAgentService(conf)
+	} else {
+		return StopServices(conf)
+	}
 }
 
 func stopHubService(conf *gpservice_config.Config) error {
@@ -49,13 +64,10 @@ func stopHubService(conf *gpservice_config.Config) error {
 	_, err = client.Stop(context.Background(), &idl.StopHubRequest{})
 	// Ignore a "hub already stopped" error
 	if err != nil {
-		errCode := grpcStatus.Code(err)
-		errMsg := grpcStatus.Convert(err).Message()
-		// XXX: "transport is closing" is not documented but is needed to uniquely interpret codes.Unavailable
-		// https://github.com/grpc/grpc/blob/v1.24.0/doc/statuscodes.md
-		if errCode != codes.Unavailable || errMsg != "transport is closing" {
-			return fmt.Errorf("failed to stop hub service: %w", err)
+		if utils.IsGrpcServerUnavailableErr(err) {
+			return utils.NewHelpErr(err, "The services may already be stopped. Use `gpservice status` to check the status.")
 		}
+		return fmt.Errorf("failed to stop hub service: %w", err)
 	}
 
 	gplog.Info("Hub service stopped successfully")
@@ -68,11 +80,11 @@ func stopAgentService(conf *gpservice_config.Config) error {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err = client.StopAgents(ctx, &idl.StopAgentsRequest{})
+	_, err = client.StopAgents(context.Background(), &idl.StopAgentsRequest{})
 	if err != nil {
+		if utils.IsGrpcServerUnavailableErr(err) {
+			return utils.NewHelpErr(fmt.Errorf("failed to stop agent service: %w", err), "The services may already be stopped. Use `gpservice status` to check the status.")
+		}
 		return fmt.Errorf("failed to stop agent service: %w", err)
 	}
 

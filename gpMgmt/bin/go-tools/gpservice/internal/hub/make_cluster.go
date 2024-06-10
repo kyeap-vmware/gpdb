@@ -221,9 +221,18 @@ func (s *Server) ValidateEnvironment(ctx context.Context, stream hubStreamer, re
 		}
 		hostAddressMap[seg.HostName][seg.HostAddress] = true
 	}
-	gplog.Debug("Host-Address-Map:[%v]", hostAddressMap)
 
-	// Get local gpVersion
+	// Add mirrors to the map
+	for _, seg := range request.GetMirrorSegments() {
+		hostDirMap[seg.HostName] = append(hostDirMap[seg.HostName], seg.DataDirectory)
+		hostPortMap[seg.HostName] = append(hostPortMap[seg.HostName], fmt.Sprintf("%d", seg.Port))
+
+		if hostAddressMap[seg.HostName] == nil {
+			hostAddressMap[seg.HostName] = make(map[string]bool)
+		}
+		hostAddressMap[seg.HostName][seg.HostAddress] = true
+	}
+	gplog.Debug("Host-Address-Map:[%v]", hostAddressMap)
 
 	localPgVersion, err := greenplum.GetPostgresGpVersion(s.GpHome)
 	if err != nil {

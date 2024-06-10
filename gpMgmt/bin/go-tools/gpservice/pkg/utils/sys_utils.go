@@ -36,6 +36,7 @@ type SystemFunctions struct {
 	RemoveAll          func(path string) error
 	ReadFile           func(name string) ([]byte, error)
 	GetHostName        func() (name string, err error)
+	OSExit             func(code int)
 }
 
 func InitializeSystemFunctions() *SystemFunctions {
@@ -55,6 +56,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 		RemoveAll:          os.RemoveAll,
 		ReadFile:           os.ReadFile,
 		GetHostName:        os.Hostname,
+		OSExit:             os.Exit,
 	}
 }
 

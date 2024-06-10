@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/constants"
 	"io"
 	"net"
 	"os"
@@ -16,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/constants"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jmoiron/sqlx"
@@ -65,7 +66,7 @@ func (p *MockPlatform) CreateServiceDir(hostnames []string, gpHome string) error
 func (p *MockPlatform) GetServiceStatusMessage(serviceName string) (string, error) {
 	return p.ServiceStatusMessage, p.Err
 }
-func (p *MockPlatform) GenerateServiceFileContents(process string, gpHome string, serviceName string) string {
+func (p *MockPlatform) GenerateServiceFileContents(process string, gpHome string, serviceName string, serviceFilepath string) string {
 	return p.ServiceFileContent
 }
 func (p *MockPlatform) ReloadHubService(servicePath string) error {
@@ -74,10 +75,10 @@ func (p *MockPlatform) ReloadHubService(servicePath string) error {
 func (p *MockPlatform) ReloadAgentService(gpHome string, hostList []string, servicePath string) error {
 	return p.Err
 }
-func (p *MockPlatform) CreateAndInstallHubServiceFile(gpHome string, serviceName string) error {
+func (p *MockPlatform) CreateAndInstallHubServiceFile(gpHome string, serviceName string, serviceFilepath string) error {
 	return p.Err
 }
-func (p *MockPlatform) CreateAndInstallAgentServiceFile(hostnames []string, gpHome string, serviceName string) error {
+func (p *MockPlatform) CreateAndInstallAgentServiceFile(hostnames []string, gpHome string, serviceName string, serviceFilepath string) error {
 	return p.Err
 }
 func (p *MockPlatform) GetStartHubCommand(serviceName string) *exec.Cmd {

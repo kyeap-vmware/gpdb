@@ -2,6 +2,7 @@ package hub
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -120,11 +121,17 @@ func (s *Server) StartAgents(ctx context.Context, in *idl.StartAgentsRequest) (*
 		return &idl.StartAgentsReply{}, err
 	}
 
-	// Make sure service has started :
+	// Make sure service has started
 	err = s.DialAllAgents()
 	if err != nil {
 		return &idl.StartAgentsReply{}, err
 	}
+
+	err = s.CheckAgentHealth()
+	if err != nil {
+		return &idl.StartAgentsReply{}, err
+	}
+
 	return &idl.StartAgentsReply{}, nil
 }
 
@@ -176,6 +183,33 @@ func (s *Server) DialAllAgents(opts ...grpc.DialOption) error {
 	}
 
 	return nil
+}
+
+func (s *Server) ReportAgentHealth(ctx context.Context, in *idl.ReportAgentHealthRequest) (*idl.ReportAgentHealthResponse, error) {
+	err := s.CheckAgentHealth()
+	if err != nil {
+		return &idl.ReportAgentHealthResponse{}, err
+	}
+
+	return &idl.ReportAgentHealthResponse{}, nil
+}
+
+func (s *Server) CheckAgentHealth() error {
+	var err error
+
+	err = s.DialAllAgents()
+	if err != nil {
+		return err
+	}
+
+	for _, conn := range s.Conns {
+		healthErr := utils.CheckGRPCServerHealth(conn.Conn)
+		if healthErr != nil {
+			err = errors.Join(err, healthErr)
+		}
+	}
+
+	return err
 }
 
 func (s *Server) StopAgents(ctx context.Context, in *idl.StopAgentsRequest) (*idl.StopAgentsReply, error) {

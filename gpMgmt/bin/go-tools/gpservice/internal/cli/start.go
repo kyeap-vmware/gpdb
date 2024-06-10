@@ -3,7 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -11,6 +13,7 @@ import (
 	"github.com/greenplum-db/gp-common-go-libs/gplog"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 )
 
 func StartCmd() *cobra.Command {
@@ -19,6 +22,7 @@ func StartCmd() *cobra.Command {
 	startCmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start hub and agent services",
+		Args:  cobra.NoArgs,
 		Example: `Start the hub and agent services
 $ gpservice start
 
@@ -28,13 +32,10 @@ $ gpservice start --hub
 To start only the agent service
 $ gpservice start --agent
 `,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if startHub {
-				return startHubService(conf)
-			} else if startAgent {
-				return startAgentService(conf)
-			} else {
-				return StartServices(conf)
+		Run: func(cmd *cobra.Command, args []string) {
+			err := runStartCmd(startHub, startAgent)
+			if err != nil {
+				utils.LogErrorAndExit(err, 1)
 			}
 		},
 	}
@@ -45,10 +46,37 @@ $ gpservice start --agent
 	return startCmd
 }
 
+func runStartCmd(startHub, startAgent bool) error {
+	if startHub {
+		return startHubService(conf)
+	} else if startAgent {
+		return startAgentService(conf)
+	} else {
+		return StartServices(conf)
+	}
+}
+
 func startHubService(conf *gpservice_config.Config) error {
+	errPrefix := "failed to start hub service"
 	out, err := platform.GetStartHubCommand(conf.ServiceName).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to start hub service: %s, %w", out, err)
+		return fmt.Errorf("%s: %s, %w", errPrefix, out, err)
+	}
+
+	credentials, err := conf.Credentials.LoadClientCredentials()
+	if err != nil {
+		return fmt.Errorf("%s: %w", errPrefix, err)
+	}
+
+	address := net.JoinHostPort("localhost", strconv.Itoa(conf.HubPort))
+	conn, err := grpc.NewClient(address, grpc.WithTransportCredentials(credentials))
+	if err != nil {
+		return fmt.Errorf("%s: %w", errPrefix, err)
+	}
+
+	err = utils.CheckGRPCServerHealth(conn)
+	if err != nil {
+		return fmt.Errorf("%s: %w", errPrefix, err)
 	}
 
 	gplog.Info("Hub service started successfully")
@@ -68,8 +96,11 @@ func startAgentService(conf *gpservice_config.Config) error {
 		return err
 	}
 
-	_, err = client.StartAgents(context.Background(), &idl.StartAgentsRequest{}, grpc.WaitForReady(true))
+	_, err = client.StartAgents(context.Background(), &idl.StartAgentsRequest{})
 	if err != nil {
+		if utils.IsGrpcServerUnavailableErr(err) {
+			return utils.NewHelpErr(err, "Ensure the hub service is running. If it is not, start the service using the 'gpservice start --hub' command.")
+		}
 		return fmt.Errorf("failed to start agent service: %w", err)
 	}
 

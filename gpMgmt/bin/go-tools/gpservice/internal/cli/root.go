@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	ConfigFilepath string
+	configFilepath string
 	conf           *config.Config
 	verbose        bool
 )
@@ -20,23 +21,27 @@ var (
 func RootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use: "gpservice",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			var err error
+
 			// gpservice configuration is created after the init command
 			if cmd.Name() == "init" {
 				initializeLogger(cmd, hubLogDir)
 				return
 			}
 
-			conf, err = config.Read(ConfigFilepath)
+			conf, err = config.Read(configFilepath)
 			if err != nil {
-				return err
+				fmt.Println(err)
+				fmt.Println("If gpservice is not initialized, execute the 'gpservice init' command to initialize them.")
+				os.Exit(1)
 			}
 
 			initializeLogger(cmd, conf.LogDir)
 			return
 		}}
 
-	root.PersistentFlags().StringVar(&ConfigFilepath, "config-file", filepath.Join(os.Getenv("GPHOME"), constants.ConfigFileName), `Path to gpservice configuration file`)
+	root.PersistentFlags().StringVar(&configFilepath, "config-file", filepath.Join(os.Getenv("GPHOME"), constants.ConfigFileName), `Path to gpservice configuration file`)
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, `Provide verbose output`)
 
 	root.CompletionOptions.DisableDefaultCmd = true

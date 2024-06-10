@@ -2,12 +2,12 @@ package cli_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"net"
-	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 )
@@ -27,6 +27,8 @@ func TestAgentCmd(t *testing.T) {
 	})
 
 	t.Run("returns error when fails to start the agent server", func(t *testing.T) {
+		_, _, logfile := testhelper.SetupTestLogger()
+		
 		port, cleanup := testutils.GetAndListenOnPort(t)
 		defer cleanup()
 
@@ -34,16 +36,13 @@ func TestAgentCmd(t *testing.T) {
 		config.AgentPort = port
 		resetConf := cli.SetConf(config)
 		defer resetConf()
+		
+		utils.System.OSExit = func(code int) {}
+		defer utils.ResetSystemFunctions()
 
-		var expectedErr *net.OpError
-		_, err := testutils.ExecuteCobraCommand(t, cli.AgentCmd())
-		if !errors.As(err, &expectedErr) {
-			t.Fatalf("got %T, want %T", err, err)
-		}
+		testutils.ExecuteCobraCommand(t, cli.AgentCmd())
 
-		expectedErrPrefix := fmt.Sprintf("could not listen on port %d:", port)
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := fmt.Sprintf(`\[ERROR\]:-could not listen on port %d:`, port)
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 }

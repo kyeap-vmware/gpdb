@@ -116,6 +116,26 @@ func (mr *MockHubClientMockRecorder) MakeCluster(arg0, arg1 interface{}, arg2 ..
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeCluster", reflect.TypeOf((*MockHubClient)(nil).MakeCluster), varargs...)
 }
 
+// ReportAgentHealth mocks base method.
+func (m *MockHubClient) ReportAgentHealth(arg0 context.Context, arg1 *idl.ReportAgentHealthRequest, arg2 ...grpc.CallOption) (*idl.ReportAgentHealthResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "ReportAgentHealth", varargs...)
+	ret0, _ := ret[0].(*idl.ReportAgentHealthResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReportAgentHealth indicates an expected call of ReportAgentHealth.
+func (mr *MockHubClientMockRecorder) ReportAgentHealth(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportAgentHealth", reflect.TypeOf((*MockHubClient)(nil).ReportAgentHealth), varargs...)
+}
+
 // StartAgents mocks base method.
 func (m *MockHubClient) StartAgents(arg0 context.Context, arg1 *idl.StartAgentsRequest, arg2 ...grpc.CallOption) (*idl.StartAgentsReply, error) {
 	m.ctrl.T.Helper()
@@ -275,6 +295,21 @@ func (m *MockHubServer) MakeCluster(arg0 *idl.MakeClusterRequest, arg1 idl.Hub_M
 func (mr *MockHubServerMockRecorder) MakeCluster(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MakeCluster", reflect.TypeOf((*MockHubServer)(nil).MakeCluster), arg0, arg1)
+}
+
+// ReportAgentHealth mocks base method.
+func (m *MockHubServer) ReportAgentHealth(arg0 context.Context, arg1 *idl.ReportAgentHealthRequest) (*idl.ReportAgentHealthResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReportAgentHealth", arg0, arg1)
+	ret0, _ := ret[0].(*idl.ReportAgentHealthResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReportAgentHealth indicates an expected call of ReportAgentHealth.
+func (mr *MockHubServerMockRecorder) ReportAgentHealth(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportAgentHealth", reflect.TypeOf((*MockHubServer)(nil).ReportAgentHealth), arg0, arg1)
 }
 
 // StartAgents mocks base method.

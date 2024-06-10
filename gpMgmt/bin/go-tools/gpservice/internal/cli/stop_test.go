@@ -2,9 +2,10 @@ package cli_test
 
 import (
 	"errors"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"strings"
+	"fmt"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/golang/mock/gomock"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/greenplum-db/gpdb/gpservice/idl/mock_idl"
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 )
 
 func TestStopCmd(t *testing.T) {
@@ -99,13 +101,16 @@ func TestStopCmd(t *testing.T) {
 	})
 
 	t.Run("returns error when fails to stop the hub service", func(t *testing.T) {
-		testhelper.SetupTestLogger()
+		_, _, logfile := testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
+		
+		utils.System.OSExit = func(code int) {}
+		defer utils.ResetSystemFunctions()
 
 		expectedErr := errors.New("error")
 		client := mock_idl.NewMockHubClient(ctrl)
@@ -120,25 +125,23 @@ func TestStopCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConnectToHub()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StopCmd())
-		if !errors.Is(err, expectedErr) {
-			t.Fatalf("got %#v, want %#v", err, expectedErr)
-		}
+		testutils.ExecuteCobraCommand(t, cli.StopCmd())
 
-		expectedErrPrefix := "failed to stop hub service:"
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := fmt.Sprintf(`\[ERROR\]:-failed to stop hub service: %v`, expectedErr)
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 
 	t.Run("returns error when fails to stop the agent service", func(t *testing.T) {
-		testhelper.SetupTestLogger()
+		_, _, logfile := testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
+		
+		utils.System.OSExit = func(code int) {}
+		defer utils.ResetSystemFunctions()
 
 		expectedErr := errors.New("error")
 		client := mock_idl.NewMockHubClient(ctrl)
@@ -153,14 +156,9 @@ func TestStopCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConnectToHub()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.StopCmd())
-		if !errors.Is(err, expectedErr) {
-			t.Fatalf("got %#v, want %#v", err, expectedErr)
-		}
+		testutils.ExecuteCobraCommand(t, cli.StopCmd())
 
-		expectedErrPrefix := "failed to stop agent service:"
-		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
-			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
-		}
+		expected := fmt.Sprintf(`\[ERROR\]:-failed to stop agent service: %v`, expectedErr)
+		testutils.AssertLogMessage(t, logfile, expected)
 	})
 }
