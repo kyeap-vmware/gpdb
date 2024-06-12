@@ -175,7 +175,7 @@ OPTIONS
 --max_connections=<number> | -m <number>
 
  Sets the maximum number of client connections allowed to the coordinator. 
- The default is 25.
+ The default is 250.
 
 
 -O output_configuration_file
