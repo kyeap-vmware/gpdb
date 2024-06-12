@@ -864,7 +864,7 @@ begin
     perform gp_inject_fault('executor_pre_tuple_processed', 'reset', dbid) from gp_segment_configuration;
     perform gp_inject_fault('send_exec_stats', 'reset', dbid) from gp_segment_configuration;
 
-    perform gp_inject_fault('executor_pre_tuple_processed', 'error', dbid)
+    perform gp_inject_fault('executor_pre_tuple_processed', 'error', dbid, current_setting('gp_session_id')::int)
     from gp_segment_configuration where role = 'p' and content > -1;
     perform gp_inject_fault('send_exec_stats', 'error', dbid)
     from gp_segment_configuration where role = 'p' and content > -1;
