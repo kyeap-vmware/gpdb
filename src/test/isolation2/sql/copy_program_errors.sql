@@ -133,3 +133,24 @@ WHERE query LIKE '%sleep 9%' AND query NOT LIKE '%pg_stat_activity%' AND state =
 -- Pipe fds linking parent backend with shell and PROGRAM should be gone.
 1:SELECT content, count_child_pipes(pid, content) FROM gp_backend_info();
 !\retcode rm /tmp/data_load_error_fifo*;
+
+--
+-- Test copying from program, in the face of data loading errors with even more
+-- data. This is the same as the earlier case, except the writer has more work
+-- to do, even after the constraint violation is encountered. Since this is
+-- something that the server causes, we shouldn't report the child process'
+-- resultant exit (and report the check constraint violation instead).
+!\retcode mkfifo /tmp/data_load_error_fifo0;
+!\retcode mkfifo /tmp/data_load_error_fifo1;
+!\retcode mkfifo /tmp/data_load_error_fifo2;
+
+1:CREATE TABLE data_load_error2(i int CHECK (i < 100000)) DISTRIBUTED REPLICATED;
+1&:COPY data_load_error2 FROM PROGRAM 'cat /tmp/data_load_error_fifo<SEGID>' ON SEGMENT;
+-- Violate the check constraint by writing to one of the named pipes.
+!\retcode seq 1 200000 > /tmp/data_load_error_fifo0;
+1<:
+-- Child shell and grandchild PROGRAM should be gone
+1:SELECT content, (get_descendant_process_info(pid)).* from gp_backend_info();
+-- Pipe fds linking parent backend with shell and PROGRAM should be gone.
+1:SELECT content, count_child_pipes(pid, content) FROM gp_backend_info();
+!\retcode rm /tmp/data_load_error_fifo*;

@@ -275,3 +275,58 @@ CONTEXT:  COPY data_load_error1, line 100000: "100000"
 
 -- end_ignore
 (exited with code 0)
+
+--
+-- Test copying from program, in the face of data loading errors with even more
+-- data. This is the same as the earlier case, except the writer has more work
+-- to do, even after the constraint violation is encountered. Since this is
+-- something that the server causes, we shouldn't report the child process'
+-- resultant exit (and report the check constraint violation instead).
+!\retcode mkfifo /tmp/data_load_error_fifo0;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode mkfifo /tmp/data_load_error_fifo1;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+!\retcode mkfifo /tmp/data_load_error_fifo2;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)
+
+1:CREATE TABLE data_load_error2(i int CHECK (i < 100000)) DISTRIBUTED REPLICATED;
+CREATE TABLE
+1&:COPY data_load_error2 FROM PROGRAM 'cat /tmp/data_load_error_fifo<SEGID>' ON SEGMENT;  <waiting ...>
+-- Violate the check constraint by writing to one of the named pipes.
+!\retcode seq 1 200000 > /tmp/data_load_error_fifo0;
+-- start_ignore
+
+-- end_ignore
+(exited with code 141)
+1<:  <... completed>
+ERROR:  new row for relation "data_load_error2" violates check constraint "data_load_error2_i_check"  (seg0 127.0.1.1:7002 pid=299040)
+DETAIL:  Failing row contains (100000).
+CONTEXT:  COPY data_load_error2, line 100000: "100000"
+-- Child shell and grandchild PROGRAM should be gone
+1:SELECT content, (get_descendant_process_info(pid)).* from gp_backend_info();
+ content | pg_backend_pid | descendant_proc 
+---------+----------------+-----------------
+(0 rows)
+-- Pipe fds linking parent backend with shell and PROGRAM should be gone.
+1:SELECT content, count_child_pipes(pid, content) FROM gp_backend_info();
+ content | count_child_pipes 
+---------+-------------------
+ -1      | 5                 
+ 0       | 5                 
+ 1       | 5                 
+ 2       | 5                 
+(4 rows)
+!\retcode rm /tmp/data_load_error_fifo*;
+-- start_ignore
+
+-- end_ignore
+(exited with code 0)

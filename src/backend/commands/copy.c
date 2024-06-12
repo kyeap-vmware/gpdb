@@ -8111,6 +8111,15 @@ close_program_pipes(CopyState cstate)
 	}
 	else
 	{
+		/*
+		 * If we ended a COPY FROM PROGRAM before reaching EOF, then it's
+		 * expectable for the called program to fail with SIGPIPE, and we
+		 * should not report that as an error.  Otherwise, SIGPIPE indicates a
+		 * problem.
+		 */
+		if (cstate->is_copy_from && !cstate->reached_eof &&
+			wait_result_is_signal(ret, SIGPIPE))
+			return;
 		ereport(ERROR,
 				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION),
 				 errmsg("%s", wait_result_to_str(ret)),
