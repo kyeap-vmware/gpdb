@@ -61,12 +61,6 @@ CGPOptimizer::GPOPTOptimizedPlan(
 	}
 	GPOS_CATCH_EX(ex)
 	{
-		// clone the error message before context free.
-		CHAR *serialized_error_msg =
-			gpopt_context.CloneErrorMsg(MessageContext);
-		// clean up context
-		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
-
 		// Special handler for a few common user-facing errors. In particular,
 		// we want to use the correct error code for these, in case an application
 		// tries to do something smart with them.
@@ -97,6 +91,19 @@ CGPOptimizer::GPOPTOptimizedPlan(
 		{
 			if (errstart(INFO, TEXTDOMAIN))
 			{
+				CHAR *serialized_error_msg = nullptr;
+				GPOS_TRY
+				{
+					// clone the error message before context free.
+					serialized_error_msg =
+						gpopt_context.CloneErrorMsg(MessageContext);
+					// clean up context
+				}
+				GPOS_CATCH_EX(ex)
+				{
+					PG_RE_THROW();
+				}
+				GPOS_CATCH_END;
 				errcode(ERRCODE_FEATURE_NOT_SUPPORTED);
 				errmsg(
 					"GPORCA failed to produce a plan, falling back to Postgres-based planner");
@@ -105,15 +112,16 @@ CGPOptimizer::GPOPTOptimizedPlan(
 					errdetail("%s", serialized_error_msg);
 				}
 				errfinish(ex.Filename(), ex.Line(), nullptr);
+
+				if (serialized_error_msg)
+				{
+					pfree(serialized_error_msg);
+				}
 			}
 		}
 
+		gpopt_context.Free(gpopt_context.epinQuery, gpopt_context.epinPlStmt);
 		*had_unexpected_failure = gpopt_context.m_is_unexpected_failure;
-
-		if (serialized_error_msg)
-		{
-			pfree(serialized_error_msg);
-		}
 	}
 	GPOS_CATCH_END;
 	return plStmt;

@@ -8,6 +8,7 @@
 
 CREATE SCHEMA gporca_faults;
 SET search_path = gporca_faults, public;
+SET optimizer_trace_fallback=on;
 
 CREATE TABLE foo (a int, b int);
 INSERT INTO foo VALUES (1,1);
@@ -34,3 +35,13 @@ SELECT * FROM func1_nosql_vol(5), foo;
 
 -- The fault should *not* be hit above when optimizer = off, to reset it now.
 SELECT gp_inject_fault('opt_relcache_translator_catalog_access', 'reset', 1);
+
+-- test corruption when MemCtxtStrdup throw ERROR in ORCA
+SELECT gp_inject_fault_infinite('gpdbwrappers_MemCtxtStrdup', 'error', 1);
+EXPLAIN SELECT * FROM func1_nosql_vol(5), foo;
+
+-- Must let Planner reset the injected fault
+SET optimizer to off;
+SELECT gp_inject_fault_infinite('gpdbwrappers_MemCtxtStrdup', 'reset', 1);
+RESET optimizer;
+EXPLAIN SELECT * FROM func1_nosql_vol(5), foo;

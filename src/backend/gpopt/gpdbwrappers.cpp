@@ -1542,6 +1542,9 @@ gpdb::MemCtxtStrdup(MemoryContext context, const char *string)
 {
 	GP_WRAP_START;
 	{
+#ifdef FAULT_INJECTOR
+		SIMPLE_FAULT_INJECTOR("gpdbwrappers_MemCtxtStrdup");
+#endif
 		return MemoryContextStrdup(context, string);
 	}
 	GP_WRAP_END;
