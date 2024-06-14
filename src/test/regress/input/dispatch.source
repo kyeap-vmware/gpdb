@@ -156,7 +156,7 @@ select * from dispatchtesttab where t = repeat('x', 1024*11);
 
 select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
 -- inject a 'skip' fault before QE sends its motion_listener
-select gp_inject_fault('send_qe_details_init_backend', 'skip', 2);
+select gp_inject_fault_infinite('send_qe_details_init_backend', 'skip', 2);
 
 -- terminate exiting QEs first
 \c dispatch_test_db

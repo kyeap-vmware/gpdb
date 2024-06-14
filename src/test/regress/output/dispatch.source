@@ -243,8 +243,8 @@ select gp_inject_fault('send_qe_details_init_backend', 'reset', 2);
 (1 row)
 
 -- inject a 'skip' fault before QE sends its motion_listener
-select gp_inject_fault('send_qe_details_init_backend', 'skip', 2);
- gp_inject_fault 
+select gp_inject_fault_infinite('send_qe_details_init_backend', 'skip', 2);
+ gp_inject_fault_infinite 
 -----------------
  Success:
 (1 row)
