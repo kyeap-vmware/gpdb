@@ -10,6 +10,10 @@ CREATE EXTERNAL WEB TABLE gpfdist_ssl_start (x text)
 execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data --ssl @abs_srcdir@/data/gpfdist_ssl/certs_matching -l /tmp/gpfdist_certs_matching.log </dev/null >/dev/null 2>&1 &);  sleep 5;  ps -A -o pid,comm |grep [g]pfdist |grep -v postgres:) '
 on SEGMENT 0
 FORMAT 'text' (delimiter '|');
+CREATE EXTERNAL WEB TABLE gpfdist_ssl_start_with_min_tls_version (x text)
+execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data --ssl @abs_srcdir@/data/gpfdist_ssl/certs_matching --ssl_min_protocol_version TLSv1.3 -l /tmp/gpfdist_certs_matching.log </dev/null >/dev/null 2>&1 &);  sleep 5;  ps -A -o pid,comm |grep [g]pfdist |grep -v postgres:) '
+on SEGMENT 0
+FORMAT 'text' (delimiter '|');
 CREATE EXTERNAL WEB TABLE gpfdist_ssl_start_ca_verify (x text)
 execute E'((@bindir@/gpfdist -p 7070 -d @abs_srcdir@/data --ssl @abs_srcdir@/data/gpfdist_ssl/certs_server_no_verify -l /tmp/gpfdist_certs_matching.log --ssl_verify_peer on </dev/null >/dev/null 2>&1 &);  sleep 5;  ps -A -o pid,comm |grep [g]pfdist |grep -v postgres:) '
 on SEGMENT 0
@@ -85,7 +89,7 @@ CREATE EXTERNAL WEB TABLE curl_with_tls12 (x text)
 execute E'
 curl --help | grep tls-max >/dev/null 2>&1;ret=$?;if [ $ret -eq 0 ];then max_tls="--tls-max 1.2";fi;
 curl -H "X-GP-PROTO: 1" https://127.0.0.1:7070/gpfdist_ssl/tbl2.tbl -vk --cert @abs_srcdir@/data/gpfdist_ssl/certs_matching/client.crt --key @abs_srcdir@/data/gpfdist_ssl/certs_matching/client.key --tlsv1.2 $max_tls >/dev/null 2>&1;ret=$?;
-if [ $ret -ne 35 ];then
+if [ $ret -eq 0 ];then
     echo "success";
 else
     echo $ret;
@@ -98,6 +102,43 @@ select * from curl_with_tls12;
  success
 (1 row)
 
+-- test option tls_min_protocol_version
+-- start_ignore
+select * from gpfdist_ssl_stop;
+      x      
+-------------
+ stopping...
+(1 row)
+
+select * from gpfdist_ssl_start_with_min_tls_version;
+       x       
+---------------
+  9796 gpfdist
+(1 row)
+
+-- end_ignore
+-- Expected error: "curl: (35) Peer reports incompatible or unsupported protocol version."
+select * from curl_with_tls12;
+ x  
+----
+ 35
+(1 row)
+
+-- start_ignore
+select * from gpfdist_ssl_stop;
+      x      
+-------------
+ stopping...
+(1 row)
+
+select * from gpfdist_ssl_start;
+       x       
+---------------
+  9796 gpfdist
+(1 row)
+
+-- end_ignore
+-- end test option tls_min_protocol_version
 drop external table if exists curl_with_tls12;
 -- end test disable tls1.0 and tls1.1
 -- gpfdist_ssl case 2

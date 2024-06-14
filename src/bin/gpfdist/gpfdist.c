@@ -202,11 +202,12 @@ static struct
 	struct transform* trlist; /* transforms from config file */
 	const char* ssl; /* path to certificates in case we use gpfdist with ssl */
 	const char*	ssl_verify; /* enable SSL certificate authentication on the GPDB side */
+	const char* ssl_min_protocol_version; /* minimum SSL/TLS protocol version that is permitted to use */
 	int			w; /* The time used for session timeout in seconds */
 	int 		k; /* The time used to clean up sessions in seconds */
 	int			compress; /* The flag to indicate whether comopression transmission is open */
 	int			multi_thread; /* The number of working threads for compression transmission */
-} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, "on", 0, 300, 0, 0};
+} opt = { 8080, 8080, 0, 0, 0, ".", 0, 0, -1, 5, 0, 32768, 0, 256, 0, 0, 0, "on", "TLSv1.2", 0, 300, 0, 0};
 
 #define START_BUFFER_SIZE (1 << 20) /* 1M as start size */
 #define MAXIMUM_BUFFER_SIZE (1 << 30) /* 1G as Maximum size */
@@ -601,7 +602,7 @@ static void usage_error(const char* msg, int print_usage)
 		{
 			fprintf(stderr,
 					"gpfdist -- file distribution web server\n\n"
-						"usage: gpfdist [--ssl <certificates_directory>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>] [-k <seconds>]"
+						"usage: gpfdist [--ssl <certificates_directory>] [--ssl_min_protocol_version <ssl_version>] [-d <directory>] [-p <http(s)_port>] [-l <log_file>] [-t <timeout>] [-v | -V | -s] [-m <maxlen>] [-w <timeout>] [-k <seconds>]"
 #ifdef GPFXDIST
 					    "[-c file]"
 #endif
@@ -622,6 +623,7 @@ static void usage_error(const char* msg, int print_usage)
 						"        -m maxlen  : max data row length expected, in bytes. default is 32768\n"
 #ifdef USE_SSL
 						"        --ssl dir  : start HTTPS server. Use the certificates from the specified directory\n"
+						"		 --ssl_min_protocol_version [TLSv1.2 | TLSv1.3] : default permitted minimum SSL/TLS version is TLSv1.2\n"
 #endif
 #ifdef GPFXDIST
 					    "        -c file    : configuration file for transformations\n"
@@ -691,6 +693,7 @@ static void parse_command_line(int argc, const char* const argv[],
 	{ NULL, 'z', 1, "internal - queue size for listen call" },
 	{ "ssl", 257, 1, "ssl - certificates files under this directory" },
 	{ "ssl_verify_peer", 260, 1, "ssl_verify_peer - enable or disable the authentication for gpdb identity" },
+	{ "ssl_min_protocol_version", 261, 1, "ssl_min_protocol_version -- set the minimum SSL/TLS protocol version that is permitted to use" },
 #ifdef GPFXDIST
 	{ NULL, 'c', 1, "transform configuration file" },
 #endif
@@ -777,12 +780,18 @@ static void parse_command_line(int argc, const char* const argv[],
 		case 260:
 			opt.ssl_verify = arg;
 			break;
+		case 261:
+			opt.ssl_min_protocol_version = arg;
+			break;
 #else
 		case 257:
 			usage_error("Flag ssl is not supported by this build", 0);
 			break;
 		case 260:
 			usage_error("Flag ssl_verify_peer is not supported by this build", 0);
+			break;
+		case 261:
+			usage_error("Flag ssl_min_protocol_version is not supported by this build", 0);
 			break;
 #endif
 		case 256:
@@ -963,6 +972,18 @@ static void parse_command_line(int argc, const char* const argv[],
 			usage_error(apr_psprintf(pool, "Error: cannot access directory '%s'\n"
 				"Please specify a valid directory for --ssl switch", opt.ssl), 0);
 		opt.ssl = p;
+	}
+
+	/* validate opt.ssl_min_protocol_version */
+	if (opt.ssl_min_protocol_version)
+	{
+		char* p = gstring_trim(apr_pstrdup(pool, opt.ssl_min_protocol_version));
+
+		if (strcmp(p, "TLSv1.2") != 0 && strcmp(p, "TLSv1.3") != 0)
+			usage_error(apr_psprintf(pool, "Error: '%s' is NOT a valid value.\n"
+				"Please specify [TLSv1.2 | TLSv1.3] for --ssl_min_protocol_version",
+				opt.ssl_min_protocol_version), 0);
+		opt.ssl_min_protocol_version = p;
 	}
 #endif
 
@@ -4559,6 +4580,9 @@ static SSL_CTX *initialize_ctx(void)
 
 	/* Disable old protocol versions */
 	SSL_CTX_set_options(ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1);
+	if (strcmp(opt.ssl_min_protocol_version, "TLSv1.3") == 0)
+		SSL_CTX_set_options(ctx, SSL_OP_NO_TLSv1_2);
+
 	/* Generate random seed */
 	if ( RAND_poll() == 0 )
 		gfatal(NULL,"Can't generate random seed for SSL");

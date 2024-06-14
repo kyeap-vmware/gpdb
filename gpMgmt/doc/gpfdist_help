@@ -10,7 +10,7 @@ SYNOPSIS
 gpfdist [-d <directory>] [-p <http_port>] [-l <log_file>] [-t <timeout>] 
 [-S] [-w <time>] [-v | -V] [-m <max_length>] [--ssl <certificate_path>]
 [--compress] [--multi_thread <number_of_threads>] [-k <seconds>]
-[--ssl_verify_peer <on/off>]
+[--ssl_verify_peer <on/off>] [--ssl_min_protocol_version <ssl_version>]
 
 gpfdist [-? | --help] | --version
 
@@ -147,6 +147,10 @@ OPTIONS
 
  The root directory (/) cannot be specified as certificate_path. 
 
+ --ssl_min_protocol_version <ssl_version>
+
+ Control the minimum SSL/TLS protocol version that gpfdist permits.
+ Valid values for this option are TLSv1.2 or TLSv1.3. Default is TLSv1.2.
 
 --compress
 
