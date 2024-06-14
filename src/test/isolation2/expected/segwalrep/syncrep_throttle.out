@@ -1,0 +1,112 @@
+-- set wait_for_replication_threshold to 1kB for quicker test
+!\retcode gpconfig -c wait_for_replication_threshold -v 1;
+-- start_ignore
+20240613:18:06:15:502245 gpconfig:station3:pivotal-[INFO]:-completed successfully with parameters '-c wait_for_replication_threshold -v 1'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Starting gpstop with args: -u
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Gathering information and validating the environment...
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Obtaining Segment details from coordinator...
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.2.0-rc.1+dev.146.ga7d1d0fcd05 build dev'
+20240613:18:06:15:502282 gpstop:station3:pivotal-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)
+
+----------
+-- INSERT
+----------
+
+CREATE TABLE insert_throttle(i int);
+CREATE TABLE
+
+-- Suspend walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+-- This should wait for syncrep since its WAL size greater than wait_for_replication_threshold
+1&:INSERT INTO insert_throttle SELECT 1 FROM generate_series(1, 1000000);  <waiting ...>
+
+SELECT is_query_waiting_for_syncrep(50, 'INSERT INTO insert_throttle SELECT 1 FROM generate_series(1, 1000000);');
+ is_query_waiting_for_syncrep 
+------------------------------
+ t                            
+(1 row)
+
+-- Smoke test: ensure CHECKPOINTs are not blocked while we are waiting on syncrep.
+CHECKPOINT;
+CHECKPOINT
+
+-- reset walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+1<:  <... completed>
+INSERT 0 1000000
+
+----------
+-- DELETE
+----------
+
+CREATE TABLE del_throttle(i int);
+CREATE TABLE
+INSERT INTO del_throttle SELECT 1 FROM generate_series(1, 1000000);
+INSERT 0 1000000
+
+-- Suspend walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+-- This should wait for syncrep since its WAL size greater than wait_for_replication_threshold
+1&:DELETE FROM del_throttle;  <waiting ...>
+
+SELECT is_query_waiting_for_syncrep(50, 'DELETE FROM del_throttle;');
+ is_query_waiting_for_syncrep 
+------------------------------
+ t                            
+(1 row)
+
+-- Smoke test: ensure CHECKPOINTs are not blocked while we are waiting on syncrep.
+CHECKPOINT;
+CHECKPOINT
+
+-- reset walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+1<:  <... completed>
+DELETE 1000000
+
+!\retcode gpconfig -r wait_for_replication_threshold;
+-- start_ignore
+20240613:18:06:17:502324 gpconfig:station3:pivotal-[INFO]:-completed successfully with parameters '-r wait_for_replication_threshold'
+
+-- end_ignore
+(exited with code 0)
+!\retcode gpstop -u;
+-- start_ignore
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Starting gpstop with args: -u
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Gathering information and validating the environment...
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Obtaining Greenplum Coordinator catalog information
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Obtaining Segment details from coordinator...
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Greenplum Version: 'postgres (Greenplum Database) 7.2.0-rc.1+dev.146.ga7d1d0fcd05 build dev'
+20240613:18:06:17:502361 gpstop:station3:pivotal-[INFO]:-Signalling all postmaster processes to reload
+
+-- end_ignore
+(exited with code 0)

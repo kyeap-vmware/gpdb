@@ -2976,6 +2976,9 @@ l1:
 	if (old_key_tuple != NULL && old_key_copied)
 		heap_freetuple(old_key_tuple);
 
+	if (RelationNeedsWAL(relation))
+		wait_to_avoid_large_repl_lag();
+
 	return TM_Ok;
 }
 
