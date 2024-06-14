@@ -1,6 +1,7 @@
 package greenplum
 
 import (
+	"fmt"
 	"os/exec"
 
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
@@ -38,8 +39,7 @@ func (cmd *GpSync) BuildExecCommand(gpHome string) *exec.Cmd {
 		args = append(args, "-h", host)
 	}
 
-	args = append(args, cmd.Source, cmd.Destination)
-
+	args = append(args, cmd.Source, fmt.Sprintf("=:%s", cmd.Destination))
 	return exec.Command(utility, args...)
 }
 

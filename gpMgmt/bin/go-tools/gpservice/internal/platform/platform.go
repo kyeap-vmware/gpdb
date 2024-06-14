@@ -152,10 +152,15 @@ func GenerateDarwinServiceFileContents(process, gpHome, serviceName, serviceFile
     <string>/tmp/grpc_%[1]s.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/grpc_%[1]s.log</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+	    <key>PATH</key>
+		<string>%[5]s</string>
+	</dict>
 </dict>
 </plist>
 `
-	return fmt.Sprintf(template, process, gpHome, serviceName, serviceFilepath)
+	return fmt.Sprintf(template, process, gpHome, serviceName, serviceFilepath, os.Getenv("PATH"))
 }
 
 func GenerateLinuxServiceFileContents(process, gpHome, serviceName, serviceFilepath string) string {

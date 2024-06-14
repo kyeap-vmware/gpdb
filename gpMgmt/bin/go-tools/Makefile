@@ -22,11 +22,17 @@ unit:
 # For example, to run start related tests: make integration UTILITY=start
 # NOTE: If hostfile is not provided, by default it will run tests on localhost.
 UTILITY = ''
-integration: TEST_PACKAGES := $(shell go list ./test/integration/... | grep -E $(UTILITY))
+PACKAGE = ''
+ifeq ($(PACKAGE), gpservice)
 integration:
-	go test -v -count=1 $(TEST_PACKAGES) -timeout 0 -p 1 -args -hostfile=$(FILE)
-
-test: unit integration
+	$(MAKE) -C gpservice/ integration UTILITY=$(UTILITY) FILE=$(FILE)
+else ifeq ($(PACKAGE), gpctl)
+integration:
+	$(MAKE) -C gpctl/ integration UTILITY=$(UTILITY) FILE=$(FILE)
+else
+integration:
+	@echo "Please specify a valid PACKAGE value (gpservice or gpctl)."
+endif
 
 .PHONY: test-coverage
 PACKAGE_DIRS := $(shell go list ./... | grep -vE "gp$$|constants$$|testutils|idl$$|integration")
