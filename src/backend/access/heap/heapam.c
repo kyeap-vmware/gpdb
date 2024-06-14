@@ -3940,6 +3940,9 @@ l2:
 	bms_free(modified_attrs);
 	bms_free(interesting_attrs);
 
+	if (RelationNeedsWAL(relation))
+		wait_to_avoid_large_repl_lag();
+
 	return TM_Ok;
 }
 

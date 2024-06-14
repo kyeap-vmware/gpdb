@@ -93,6 +93,112 @@ SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segmen
 1<:  <... completed>
 DELETE 1000000
 
+----------
+-- UPDATE
+----------
+
+CREATE TABLE update_throttle(i int, j int);
+CREATE TABLE
+INSERT INTO update_throttle SELECT 1, j FROM generate_series(1, 1000000) j;
+INSERT 0 1000000
+
+-- Suspend walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+SET optimizer TO off;
+SET
+EXPLAIN (COSTS OFF) UPDATE update_throttle SET j = j + 1;
+ QUERY PLAN                                                                 
+-----------------------------------
+ Update on update_throttle         
+   ->  Seq Scan on update_throttle 
+ Optimizer: Postgres-based planner                                          
+(3 rows)
+
+-- This should wait for syncrep since its WAL size greater than wait_for_replication_threshold
+1&:UPDATE update_throttle SET j = j + 1;  <waiting ...>
+
+SELECT is_query_waiting_for_syncrep(50, 'UPDATE update_throttle SET j = j + 1;');
+ is_query_waiting_for_syncrep 
+------------------------------
+ t                            
+(1 row)
+
+-- Smoke test: ensure CHECKPOINTs are not blocked while we are waiting on syncrep.
+CHECKPOINT;
+CHECKPOINT
+
+-- reset walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+1<:  <... completed>
+UPDATE 1000000
+
+RESET optimizer;
+RESET
+
+-------------------
+-- UPDATE (Split)
+-------------------
+
+CREATE TABLE split_update_throttle(i int);
+CREATE TABLE
+INSERT INTO split_update_throttle SELECT 1 FROM generate_series(1, 1000000);
+INSERT 0 1000000
+
+-- Suspend walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'suspend', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+SET optimizer TO off;
+SET
+EXPLAIN (COSTS OFF) UPDATE split_update_throttle SET i = 20;
+ QUERY PLAN                                                                                              
+---------------------------------------------------------------
+ Update on split_update_throttle                               
+   ->  Explicit Redistribute Motion 3:3  (slice1; segments: 3) 
+         ->  Split                                             
+               ->  Seq Scan on split_update_throttle           
+ Optimizer: Postgres-based planner                                                                       
+(5 rows)
+
+-- This should wait for syncrep since its WAL size greater than wait_for_replication_threshold
+1&:UPDATE split_update_throttle SET i = 20;  <waiting ...>
+
+SELECT is_query_waiting_for_syncrep(50, 'UPDATE split_update_throttle SET i = 20;');
+ is_query_waiting_for_syncrep 
+------------------------------
+ t                            
+(1 row)
+
+-- Smoke test: ensure CHECKPOINTs are not blocked while we are waiting on syncrep.
+CHECKPOINT;
+CHECKPOINT
+
+-- reset walsender
+SELECT gp_inject_fault_infinite('wal_sender_loop', 'reset', dbid) FROM gp_segment_configuration WHERE role = 'p' and content = 1;
+ gp_inject_fault_infinite 
+--------------------------
+ Success:                 
+(1 row)
+
+1<:  <... completed>
+UPDATE 1000000
+
+RESET optimizer;
+RESET
+
 !\retcode gpconfig -r wait_for_replication_threshold;
 -- start_ignore
 20240613:18:06:17:502324 gpconfig:station3:pivotal-[INFO]:-completed successfully with parameters '-r wait_for_replication_threshold'
