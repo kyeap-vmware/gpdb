@@ -146,13 +146,14 @@ WHERE query LIKE '%sleep 9%' AND query NOT LIKE '%pg_stat_activity%' AND state =
 
 1:CREATE TABLE data_load_error2(i int CHECK (i < 100000)) DISTRIBUTED REPLICATED;
 1&:COPY data_load_error2 FROM PROGRAM 'cat /tmp/data_load_error_fifo<SEGID>' ON SEGMENT;
--- Violate the check constraint by writing to one of the named pipes.
--- Use an explicit ignore block, as depending on who wins the race (SIGPIPE
+-- Use an ignore matcher, as depending on who wins the race (SIGPIPE
 -- being delivered to seq or seq's write() returning with EPIPE), the exit
 -- code can vary.
--- start_ignore
+-- start_matchignore
+-- m/\(exited with code 1\d*\)/
+-- end_matchignore
+-- Violate the check constraint by writing to one of the named pipes.
 !\retcode seq 1 200000 > /tmp/data_load_error_fifo0;
--- end_ignore
 1<:
 -- Child shell and grandchild PROGRAM should be gone
 1:SELECT content, (get_descendant_process_info(pid)).* from gp_backend_info();
