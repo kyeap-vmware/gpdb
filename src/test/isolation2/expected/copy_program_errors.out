@@ -302,11 +302,16 @@ CONTEXT:  COPY data_load_error1, line 100000: "100000"
 CREATE TABLE
 1&:COPY data_load_error2 FROM PROGRAM 'cat /tmp/data_load_error_fifo<SEGID>' ON SEGMENT;  <waiting ...>
 -- Violate the check constraint by writing to one of the named pipes.
+-- Use an explicit ignore block, as depending on who wins the race (SIGPIPE
+-- being delivered to seq or seq's write() returning with EPIPE), the exit
+-- code can vary.
+-- start_ignore
 !\retcode seq 1 200000 > /tmp/data_load_error_fifo0;
 -- start_ignore
 
 -- end_ignore
 (exited with code 141)
+-- end_ignore
 1<:  <... completed>
 ERROR:  new row for relation "data_load_error2" violates check constraint "data_load_error2_i_check"  (seg0 127.0.1.1:7002 pid=299040)
 DETAIL:  Failing row contains (100000).
