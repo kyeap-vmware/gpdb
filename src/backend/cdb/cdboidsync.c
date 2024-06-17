@@ -98,7 +98,9 @@ pg_highest_oid(PG_FUNCTION_ARGS pg_attribute_unused())
 	Oid			result;
 	Oid			max_from_segdbs;
 
+	LWLockAcquire(OidGenLock, LW_SHARED);
 	result = ShmemVariableCache->nextOid;
+	LWLockRelease(OidGenLock);
 
 	if (Gp_role == GP_ROLE_DISPATCH)
 	{
