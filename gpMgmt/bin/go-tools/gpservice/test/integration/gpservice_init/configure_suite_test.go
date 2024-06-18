@@ -3,7 +3,6 @@ package configure
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"testing"
 
@@ -13,10 +12,6 @@ import (
 	"github.com/greenplum-db/gpdb/gpservice/pkg/greenplum"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 	"github.com/greenplum-db/gpdb/gpservice/test/integration/testutils"
-)
-
-const (
-	defaultLogFile = "/tmp/gp_configure.log"
 )
 
 var (
@@ -32,7 +27,7 @@ var (
 		"[INFO]:-Wrote agent service file",
 	}
 	helpTxt = []string{
-		"Configure gp as a systemd daemon",
+		"Initialize gpservice as a systemd service",
 		"Usage:",
 		"Flags:",
 		"Global Flags:",
@@ -49,7 +44,9 @@ func init() {
 		CACertPath:     fmt.Sprintf("%s/%s", certPath, "ca-cert.pem"),
 		ServerCertPath: fmt.Sprintf("%s/%s", certPath, "server-cert.pem"),
 		ServerKeyPath:  fmt.Sprintf("%s/%s", certPath, "server-key.pem"),
+		TlsEnabled:     true,
 	}
+
 	defaultGPConf = gpservice_config.Config{
 		HubPort:     constants.DefaultHubPort,
 		AgentPort:   constants.DefaultAgentPort,
@@ -59,6 +56,7 @@ func init() {
 		GpHome:      testutils.GpHome,
 		Credentials: cred,
 	}
+
 }
 
 // TestMain function to run tests and perform cleanup at the end.
@@ -66,12 +64,8 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 	// if hostfile is not provided as input argument, create it with default host
 	if *hostfile == "" {
-		os.Exit(1)
 		*hostfile = testutils.DefaultHostfile
 		_ = os.WriteFile(*hostfile, []byte(testutils.DefaultHost), 0644)
-	} else {
-		log.Print(*hostfile)
-		os.Exit(1)
 	}
 	exitVal := m.Run()
 	tearDownTest()
@@ -80,6 +74,5 @@ func TestMain(m *testing.M) {
 }
 
 func tearDownTest() {
-	testutils.CleanupFilesOnHub(mockHostFile,
-		fmt.Sprintf("%s/%s", testutils.GpHome, constants.ConfigFileName))
+	testutils.RunDelete()
 }

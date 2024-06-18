@@ -410,3 +410,132 @@ func TestPgHbaConfValidation(t *testing.T) {
 	})
 
 }
+
+func TestClusterCreationWithNoTls(t *testing.T) {
+
+	testClusterCreationWithNoTls := func(t *testing.T) {
+		configFile := testutils.GetTempFile(t, "config.json")
+		config := GetDefaultConfig(t)
+
+		err := config.WriteConfigAs(configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %#v", err)
+		}
+
+		result, err := testutils.RunInitCluster(configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %s, %v", result.OutputMsg, err)
+		}
+
+		_, err = testutils.DeleteCluster()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	t.Run("verify cluster creation with no TLS when services are not running", func(t *testing.T) {
+		expectedOut := []string{
+			"Agent service stopped successfully",
+			"Hub service stopped successfully",
+		}
+
+		// stops the services before initliasing cluster with no tls
+		result, err := testutils.RunStop()
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
+
+		testClusterCreationWithNoTls(t)
+
+	})
+	t.Run("verify cluster creation with no TLS when services are not configured", func(t *testing.T) {
+		cliParams := []string{"services"}
+		expectedOut := []string{"Successfully deleted service configuration file", "Removed hub service file", "Successfully removed agent service file"}
+
+		result, err := testutils.RunDelete(cliParams...)
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
+		testClusterCreationWithNoTls(t)
+
+	})
+
+	testExpansionWithNoTls := func(t *testing.T) {
+		configFile := testutils.GetTempFile(t, "config.json")
+		config := GetDefaultExpansionConfig(t)
+
+		err := config.WriteConfigAs(configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %#v", err)
+		}
+
+		result, err := testutils.RunInitCluster(configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %s, %v", result.OutputMsg, err)
+		}
+
+		_, err = testutils.DeleteCluster()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+
+	t.Run("verify expansion with no TLS when services are not running", func(t *testing.T) {
+		expectedOut := []string{
+			"Agent service stopped successfully",
+			"Hub service stopped successfully",
+		}
+
+		// stops the services before initliasing cluster with no tls
+		result, err := testutils.RunStop()
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
+
+		testExpansionWithNoTls(t)
+
+	})
+	t.Run("verify expansion with no TLS when services are not configured", func(t *testing.T) {
+		cliParams := []string{"services"}
+		expectedOut := []string{"Successfully deleted service configuration file", "Removed hub service file", "Successfully removed agent service file"}
+
+		result, err := testutils.RunDelete(cliParams...)
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
+		testExpansionWithNoTls(t)
+
+	})
+}

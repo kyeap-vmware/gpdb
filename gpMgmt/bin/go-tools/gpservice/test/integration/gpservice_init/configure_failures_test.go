@@ -35,7 +35,7 @@ func TestConfigureFailure(t *testing.T) {
 			name:      "configure service with empty file for --hostfile option",
 			cliParams: []string{"--hostfile", "hostlist"},
 			expectedOut: []string{
-				"expected at least one host or hostlist specified",
+				"no host name found, please provide a valid input host name",
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func TestConfigureFailure(t *testing.T) {
 			cliParams: []string{"--host", testutils.DefaultHost,
 				"--hostfile", "abc"},
 			expectedOut: []string{
-				"[ERROR]:-if any flags in the group [host hostfile] are set none of the others can be; [host hostfile] were all set",
+				"if any flags in the group [host hostfile] are set none of the others can be; [host hostfile] were all set",
 			},
 		},
 		{
@@ -113,26 +113,6 @@ func TestConfigureFailure(t *testing.T) {
 			},
 		},
 		{
-			name: "configure service with non-existing directory as service-dir value",
-			cliParams: []string{
-				"--host", testutils.DefaultHost,
-				"--service-dir", "/newDir/Service-dir",
-			},
-			expectedOut: []string{
-				"could not create service directory /newDir/Service-dir on hosts",
-			},
-		},
-		{
-			name: "configure service with no value for service-dir option",
-			cliParams: []string{
-				"--host", testutils.DefaultHost,
-				"--service-dir",
-			},
-			expectedOut: []string{
-				"flag needs an argument: --service-dir",
-			},
-		},
-		{
 			name: "configure service with no value for log-dir option",
 			cliParams: []string{
 				"--host", testutils.DefaultHost,
@@ -157,7 +137,7 @@ func TestConfigureFailure(t *testing.T) {
 			name: "configure service fails when --gpHome value is invalid",
 			cliParams: []string{
 				"--host", testutils.DefaultHost,
-				"--gpHome", "invalid",
+				"--gphome", "invalid",
 			},
 			expectedOut: []string{
 				"could not create configuration file invalid/gp.conf",
@@ -167,7 +147,7 @@ func TestConfigureFailure(t *testing.T) {
 			name: "configure service fails when --gpHome value is empty",
 			cliParams: []string{
 				"--host", testutils.DefaultHost,
-				"--gpHome", "",
+				"--gphome", "",
 			},
 			expectedOut: []string{
 				"not a valid gpHome found",
@@ -177,19 +157,20 @@ func TestConfigureFailure(t *testing.T) {
 			name: "configure service fails when no value given for --gpHome",
 			cliParams: []string{
 				"--host", testutils.DefaultHost,
-				"--gpHome",
+				"--gphome",
 			},
 			expectedOut: []string{
-				"flag needs an argument: --gpHome",
+				"flag needs an argument: --gphome",
 			},
 		},
 		{
-			name: "configure fails when non-existing service user is given",
-			cliParams: []string{
+			name: "configure fails when value for both --no-tls and --server-certificate params are used",
+			cliParams: append([]string{
 				"--host", testutils.DefaultHost,
-				"--service-user", "user"},
+				"--no-tls",
+			}, testutils.CertificateParams...),
 			expectedOut: []string{
-				"could not create service directory",
+				"[ERROR]:-cannot specify --no-tls flag and specify certificates together",
 			},
 		},
 	}
