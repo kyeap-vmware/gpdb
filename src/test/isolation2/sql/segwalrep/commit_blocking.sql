@@ -3,7 +3,7 @@
 -- make sure we are in-sync for the primary we will be testing with
 select content, role, preferred_role, mode, status from gp_segment_configuration;
 
--- print synchronous_standby_names should be set to '*' at start of test
+-- print synchronous_standby_names should be set to 'gp_walreceiver' at start of test
 0U: show synchronous_standby_names;
 
 -- create table and show commits are not blocked
@@ -32,7 +32,7 @@ select gp_wait_until_triggered_fault('fts_probe', 1, 1);
 0U<:
 0Uq:
 
--- synchronous_standby_names should be set to '*' after primary restart
+-- synchronous_standby_names should be set to 'gp_walreceiver' after primary restart
 0U: show synchronous_standby_names;
 
 -- this should block since mirror is not up and sync replication is on

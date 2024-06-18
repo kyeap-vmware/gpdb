@@ -14,11 +14,11 @@ select content, role, preferred_role, mode, status from gp_segment_configuration
  0       | m    | m              | s    | u      
 (8 rows)
 
--- print synchronous_standby_names should be set to '*' at start of test
+-- print synchronous_standby_names should be set to 'gp_walreceiver' at start of test
 0U: show synchronous_standby_names;
  synchronous_standby_names 
 ---------------------------
- *                         
+ gp_walreceiver            
 (1 row)
 
 -- create table and show commits are not blocked
@@ -76,11 +76,11 @@ server closed the connection unexpectedly
 	before or while processing the request.
 0Uq: ... <quitting>
 
--- synchronous_standby_names should be set to '*' after primary restart
+-- synchronous_standby_names should be set to 'gp_walreceiver' after primary restart
 0U: show synchronous_standby_names;
  synchronous_standby_names 
 ---------------------------
- *                         
+ gp_walreceiver            
 (1 row)
 
 -- this should block since mirror is not up and sync replication is on

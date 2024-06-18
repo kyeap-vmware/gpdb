@@ -855,27 +855,6 @@ SyncRepGetCandidateStandbys(SyncRepStandbyData **standbys)
 		stby = *standbys + n;
 
 		SpinLockAcquire(&walsnd->mutex);
-
-		if (IS_QUERY_DISPATCHER())
-		{
-			if ((walsnd->pid != 0)
-				&& ((walsnd->state == WALSNDSTATE_STREAMING)
-					|| (walsnd->state == WALSNDSTATE_CATCHUP &&
-						walsnd->caughtup_within_range)))
-			{
-				stby->walsnd_index = i;
-				stby->pid = walsnd->pid;
-				stby->is_me = (walsnd == MyWalSnd);
-				stby->write = walsnd->write;
-				stby->flush = walsnd->flush;
-				stby->apply = walsnd->apply;
-				n++;
-			}
-
-			SpinLockRelease(&walsnd->mutex);
-			continue;
-		}
-
 		stby->pid = walsnd->pid;
 		state = walsnd->state;
 		stby->write = walsnd->write;
@@ -888,10 +867,20 @@ SyncRepGetCandidateStandbys(SyncRepStandbyData **standbys)
 		if (stby->pid == 0)
 			continue;
 
-		/* Must be streaming or stopping */
-		if (state != WALSNDSTATE_STREAMING &&
-			state != WALSNDSTATE_STOPPING)
-			continue;
+		if (IS_QUERY_DISPATCHER())
+		{
+			if (!((walsnd->state == WALSNDSTATE_STREAMING)
+				|| (walsnd->state == WALSNDSTATE_CATCHUP &&
+					walsnd->caughtup_within_range)))
+				continue;
+		}
+		else
+		{
+			/* Must be streaming or stopping */
+			if (state != WALSNDSTATE_STREAMING &&
+				state != WALSNDSTATE_STOPPING)
+				continue;
+		}
 
 		/* Must be synchronous */
 		if (stby->sync_standby_priority == 0)

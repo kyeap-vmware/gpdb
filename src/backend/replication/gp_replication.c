@@ -592,7 +592,7 @@ GetMirrorStatus(FtsResponse *response, bool *ready_for_syncrep)
 
 /*
  * Set WalSndCtl->sync_standbys_defined to true to enable synchronous segment
- * WAL replication and insert synchronous_standby_names="*" into the
+ * WAL replication and insert synchronous_standby_names="gp_walreceiver" into the
  * gp_replication.conf to persist this state in case of segment crash.
  */
 void
@@ -600,10 +600,10 @@ SetSyncStandbysDefined(void)
 {
 	if (!WalSndCtl->sync_standbys_defined)
 	{
-		set_gp_replication_config("synchronous_standby_names", "*");
+		set_gp_replication_config("synchronous_standby_names", GP_WALRECEIVER_APPNAME);
 
 		/* Signal a reload to the postmaster. */
-		elog(LOG, "signaling configuration reload: setting synchronous_standby_names to '*'");
+		elog(LOG, "signaling configuration reload: setting synchronous_standby_names to '%s'", GP_WALRECEIVER_APPNAME);
 		DirectFunctionCall1(pg_reload_conf, PointerGetDatum(NULL) /* unused */);
 	}
 }

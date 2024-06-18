@@ -14,12 +14,12 @@ select content, role, preferred_role, mode, status from gp_segment_configuration
  0       | m    | m              | s    | u      
 (8 rows)
 
--- synchronous_standby_names should be set to '*' by default on primary 2, since
+-- synchronous_standby_names should be set to 'gp_walreceiver' by default on primary 2, since
 -- we have a working/sync'd mirror
 2U: show synchronous_standby_names;
  synchronous_standby_names 
 ---------------------------
- *                         
+ gp_walreceiver            
 (1 row)
 2U: show gp_fts_mark_mirror_down_grace_period;
  gp_fts_mark_mirror_down_grace_period 
@@ -205,7 +205,7 @@ INSERT 0 10
 2U: show synchronous_standby_names;
  synchronous_standby_names 
 ---------------------------
- *                         
+ gp_walreceiver            
 (1 row)
 
 -- reset the mirror down grace period back to its default value.

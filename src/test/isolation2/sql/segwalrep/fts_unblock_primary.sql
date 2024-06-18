@@ -3,7 +3,7 @@
 -- make sure we are in-sync for the primary we will be testing with
 select content, role, preferred_role, mode, status from gp_segment_configuration;
 
--- synchronous_standby_names should be set to '*' by default on primary 2, since
+-- synchronous_standby_names should be set to 'gp_walreceiver' by default on primary 2, since
 -- we have a working/sync'd mirror
 2U: show synchronous_standby_names;
 2U: show gp_fts_mark_mirror_down_grace_period;
