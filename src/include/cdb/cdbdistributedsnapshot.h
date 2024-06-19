@@ -73,6 +73,9 @@ extern DistributedSnapshotCommitted DistributedSnapshotWithLocalMapping_Committe
 	TransactionId 							localXid,
 	bool isVacuumCheck);
 
+extern void DistributedSnapshot_AllocateXipArray(
+	DistributedSnapshot *distributedSnapshot);
+
 extern void DistributedSnapshot_Reset(
 	DistributedSnapshot *distributedSnapshot);
 

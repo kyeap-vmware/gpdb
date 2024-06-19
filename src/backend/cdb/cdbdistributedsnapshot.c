@@ -207,8 +207,32 @@ DistributedSnapshotWithLocalMapping_CommittedTest(
 }
 
 /*
- * Reset all fields except maxCount and the malloc'd pointer for
- * inProgressXidArray.
+ * Allocate a fixed-size, never-freed memory space for inProgressXidArray (if necessary).
+ * We do not palloc/pfree as we want this memory to be reusable for similar performance
+ * reasons, akin to SnapshotData->xip (see comment in GetSnapshotData()).
+ */
+void
+DistributedSnapshot_AllocateXipArray(DistributedSnapshot *distributedSnapshot)
+{
+	Assert(distributedSnapshot);
+
+	/* ignore if it is already initialized */
+	if (distributedSnapshot->inProgressXidArray != NULL)
+		return;
+
+	distributedSnapshot->inProgressXidArray =
+		(DistributedTransactionId*) malloc(GetMaxSnapshotDistributedXidCount() * sizeof(DistributedTransactionId));
+	if (distributedSnapshot->inProgressXidArray == NULL)
+		ereport(ERROR,
+				(errcode(ERRCODE_OUT_OF_MEMORY),
+				 errmsg("failed to allocate %lu byte memory for distributed snapshot xid array",
+						GetMaxSnapshotDistributedXidCount() * sizeof(DistributedTransactionId))));
+}
+
+/*
+ * Reset all fields except inProgressXidArray. We don't reset inProgressXidArray
+ * since we will reuse any allocated space it points to. Plus setting count=0 is
+ * enough to make sure any existing content in inProgressXidArray won't be used.
  */
 void
 DistributedSnapshot_Reset(DistributedSnapshot *distributedSnapshot)
@@ -218,15 +242,6 @@ DistributedSnapshot_Reset(DistributedSnapshot *distributedSnapshot)
 	distributedSnapshot->xmin = InvalidDistributedTransactionId;
 	distributedSnapshot->xmax = InvalidDistributedTransactionId;
 	distributedSnapshot->count = 0;
-	if (distributedSnapshot->inProgressXidArray == NULL)
-	{
-		distributedSnapshot->inProgressXidArray =
-			(DistributedTransactionId*) malloc(GetMaxSnapshotDistributedXidCount() * sizeof(DistributedTransactionId));
-		if (distributedSnapshot->inProgressXidArray == NULL)
-			ereport(ERROR,
-					(errcode(ERRCODE_OUT_OF_MEMORY),
-					 errmsg("out of memory")));
-	}
 }
 
 /*
@@ -243,6 +258,9 @@ DistributedSnapshot_Copy(DistributedSnapshot *target,
 
 	Assert(source->xminAllDistributedSnapshots);
 	Assert(source->xminAllDistributedSnapshots <= source->xmin);
+	Assert(source->count == 0 || source->inProgressXidArray);
+
+	DistributedSnapshot_AllocateXipArray(target);
 
 	elog((Debug_print_full_dtm ? LOG : DEBUG5),
 		 "DistributedSnapshot_Copy target inProgressXidArray %p, and "
@@ -322,15 +340,7 @@ DistributedSnapshot_Deserialize(const char *buf, DistributedSnapshot *ds)
 	{
 		int xipsize = sizeof(DistributedTransactionId) * ds->count;
 
-		if (ds->inProgressXidArray == NULL)
-		{
-			ds->inProgressXidArray =
-				(DistributedTransactionId *)malloc(sizeof(DistributedTransactionId) * GetMaxSnapshotXidCount());
-			if (ds->inProgressXidArray == NULL)
-				ereport(ERROR,
-						(errcode(ERRCODE_OUT_OF_MEMORY),
-						 errmsg("out of memory")));
-		}
+		DistributedSnapshot_AllocateXipArray(ds);
 
 		memcpy(ds->inProgressXidArray, p, xipsize);
 		p += xipsize;

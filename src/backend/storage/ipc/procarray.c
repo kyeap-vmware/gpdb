@@ -2024,7 +2024,7 @@ CreateDistributedSnapshot(DistributedSnapshot *ds)
 	globalXminDistributedSnapshots = xmax;
 	count = 0;
 
-	Assert(ds->inProgressXidArray != NULL);
+	DistributedSnapshot_AllocateXipArray(ds);
 
 	/*
 	 * For a hot standby QD, check shmCommittedGxidArray to build the knowledge.
