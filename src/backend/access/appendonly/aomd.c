@@ -255,7 +255,6 @@ mdunlink_ao(RelFileNodeBackend rnode, ForkNumber forkNumber, bool isRedo)
 	 */
 	if (forkNumber == INIT_FORKNUM)
 	{
-		path = relpath(rnode, forkNumber);
 		if (unlink(path) < 0 && errno != ENOENT)
 			ereport(WARNING,
 					(errcode_for_file_access(),
