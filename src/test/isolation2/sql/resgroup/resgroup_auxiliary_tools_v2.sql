@@ -20,8 +20,10 @@ CREATE LANGUAGE plpython3u;
 
 -- enable resource group and restart cluster.
 -- start_ignore
-! gpconfig -c gp_resource_manager -v group-v2;
 ! gpconfig -c gp_resource_group_cgroup_parent -v "gpdb"
+-- restart to make gp_resource_group_cgroup_parent works
+! gpstop -rai;
+! gpconfig -c gp_resource_manager -v group-v2;
 ! gpconfig -c max_connections -v 250 -m 25;
 ! gpconfig -c runaway_detector_activation_percent -v 100;
 ! gpstop -rai;
