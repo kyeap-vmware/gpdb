@@ -3,10 +3,13 @@ package cli_test
 import (
 	"errors"
 	"fmt"
+	"github.com/greenplum-db/gpdb/gpservice/internal/agent"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 
@@ -39,6 +42,117 @@ func InValidGpsshOpt3() {
 func TestMain(m *testing.M) {
 	os.Exit(exectest.Run(m))
 }
+
+func TestInitCmd(t *testing.T) {
+	t.Run("successfully configures the services with --no-tls flag", func(t *testing.T) {
+		_, _, logfile := testhelper.SetupTestLogger()
+
+		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
+		defer resetConf()
+
+		platform := &testutils.MockPlatform{}
+		agent.SetPlatform(platform)
+		defer agent.ResetPlatform()
+
+		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
+		utils.System.OpenFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+			_, writer, _ := os.Pipe()
+
+			return writer, nil
+		}
+		defer utils.ResetSystemFunctions()
+
+		_, err := testutils.ExecuteCobraCommand(t, cli.RootCommand(), "init", "--no-tls", "--host", "localhost")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Created service file directory .* on all hosts`)
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Wrote hub service file to .* on coordinator host`)
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Wrote agent service file to .* on segment hosts`)
+
+	})
+	t.Run("successfully configures the services", func(t *testing.T) {
+		_, _, logfile := testhelper.SetupTestLogger()
+
+		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
+		defer resetConf()
+
+		platform := &testutils.MockPlatform{}
+		agent.SetPlatform(platform)
+		defer agent.ResetPlatform()
+
+		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
+		utils.System.OpenFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+			_, writer, _ := os.Pipe()
+
+			return writer, nil
+		}
+		defer utils.ResetSystemFunctions()
+
+		args := []string{"init", "--host", "localhost", "--server-key", "tmp", "--server-certificate", "tmp", "--ca-certificate", "tmp"}
+
+		_, err := testutils.ExecuteCobraCommand(t, cli.RootCommand(), args...)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Created service file directory .* on all hosts`)
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Wrote hub service file to .* on coordinator host`)
+		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Wrote agent service file to .* on segment hosts`)
+
+	})
+	type test struct {
+		flags         []string
+		expectedError string
+		noTls         bool
+	}
+	flagTests := []test{
+		{flags: []string{"--ca-certificate"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
+		{flags: []string{"--server-certificate"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
+		{flags: []string{"--server-key"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
+		{flags: []string{"--ca-certificate", "--server-key"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
+		{flags: []string{"--server-certificate", "--server-key"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
+		{flags: []string{"--server-certificate", "--ca-certificate"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
+	}
+	for _, tc := range flagTests {
+		t.Run(fmt.Sprintf("Returns error when %s flag used with --no-tls flag", tc.flags), func(t *testing.T) {
+
+			resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
+			defer resetConf()
+
+			platform := &testutils.MockPlatform{}
+			agent.SetPlatform(platform)
+			defer agent.ResetPlatform()
+
+			utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
+			utils.System.OpenFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
+				_, writer, _ := os.Pipe()
+
+				return writer, nil
+			}
+			defer utils.ResetSystemFunctions()
+
+			gpservice_config.SetCopyConfigFileToAgents()
+			defer gpservice_config.ResetConfigFunctions()
+
+			var args []string
+			if tc.noTls {
+				args = []string{"--no-tls"}
+			}
+			for _, flag := range tc.flags {
+				args = append(args, flag, "tmp")
+			}
+
+			_, err := testutils.ExecuteCobraCommand(t, cli.InitCmd(), args...)
+
+			if !strings.Contains(err.Error(), tc.expectedError) {
+				t.Fatalf("got %q, want %q", err, tc.expectedError)
+			}
+		})
+	}
+}
+
 func TestGetUlimitSshFn(t *testing.T) {
 	_, _, logile := testhelper.SetupTestLogger()
 	t.Run("logs error when gpssh command execution fails", func(t *testing.T) {

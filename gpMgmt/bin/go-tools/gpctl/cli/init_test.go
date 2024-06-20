@@ -70,7 +70,7 @@ func resetCLIVars() {
 	cli.CheckForDuplicatPortAndDataDirectory = cli.CheckForDuplicatePortAndDataDirectoryFn
 	cli.GetSystemLocale = cli.GetSystemLocaleFn
 
-	gpservice_config.ResetConnectToHub()
+	gpservice_config.ResetConfigFunctions()
 
 }
 

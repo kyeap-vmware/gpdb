@@ -63,11 +63,12 @@ func (s *Server) Start() error {
 		return handler(ctx, req)
 	}
 
+	var grpcServer *grpc.Server
 	credentials, err := s.Credentials.LoadServerCredentials()
 	if err != nil {
 		return err
 	}
-	grpcServer := grpc.NewServer(
+	grpcServer = grpc.NewServer(
 		grpc.Creds(credentials),
 		grpc.UnaryInterceptor(interceptor),
 	)
@@ -162,14 +163,15 @@ func (s *Server) DialAllAgents(opts ...grpc.DialOption) error {
 		return nil
 	}
 
+	credentials, err := s.Credentials.LoadClientCredentials()
+	if err != nil {
+		return err
+	}
+	opts = append(opts, grpc.WithTransportCredentials(credentials))
+
 	for _, host := range s.Hostnames {
-		credentials, err := s.Credentials.LoadClientCredentials()
-		if err != nil {
-			return err
-		}
 
 		address := net.JoinHostPort(host, strconv.Itoa(s.AgentPort))
-		opts = append(opts, grpc.WithTransportCredentials(credentials))
 		conn, err := grpc.NewClient(address, opts...)
 		if err != nil {
 			return fmt.Errorf("could not connect to agent on host %s: %w", host, err)

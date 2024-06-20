@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"net"
 	"reflect"
 	"strings"
 	"testing"
@@ -73,14 +72,11 @@ func TestStartServer(t *testing.T) {
 	t.Run("listen fails when starting the server", func(t *testing.T) {
 		credentials := &testutils.MockCredentials{}
 
-		listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", constants.DefaultAgentPort))
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-		defer listener.Close()
+		port, cleanupFn := testutils.GetAndListenOnPort(t)
+		defer cleanupFn()
 
 		agentServer := agent.New(agent.Config{
-			Port:        constants.DefaultAgentPort,
+			Port:        port,
 			ServiceName: constants.DefaultServiceName,
 			Credentials: credentials,
 		})
@@ -93,7 +89,7 @@ func TestStartServer(t *testing.T) {
 
 		select {
 		case err := <-errChan:
-			expected := fmt.Sprintf("could not listen on port %d:", constants.DefaultAgentPort)
+			expected := fmt.Sprintf("could not listen on port %d:", port)
 			if !strings.Contains(err.Error(), expected) {
 				t.Fatalf("got %v, want %v", err, expected)
 			}

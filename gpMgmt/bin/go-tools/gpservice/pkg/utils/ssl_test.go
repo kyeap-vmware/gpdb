@@ -20,6 +20,7 @@ func TestLoadServerCredentials(t *testing.T) {
 			CACertPath:     "./certificates/ca-cert.pem",
 			ServerCertPath: "./certificates/server-cert.pem",
 			ServerKeyPath:  "./certificates/server-key.pem",
+			TlsEnabled:     true,
 		}
 		_, err := creds.LoadServerCredentials()
 		if err != nil {
@@ -32,6 +33,7 @@ func TestLoadServerCredentials(t *testing.T) {
 			CACertPath:     "./certificates/ca-cert.pem",
 			ServerCertPath: "./certificates/server-cert.pem",
 			ServerKeyPath:  "./certificates/server-key.pem",
+			TlsEnabled:     true,
 		}
 		creds.ServerCertPath = "/dev/null"
 		_, err := creds.LoadServerCredentials()
@@ -60,6 +62,7 @@ func TestLoadClientCredentials(t *testing.T) {
 			CACertPath:     "./certificates/ca-cert.pem",
 			ServerCertPath: "./certificates/server-cert.pem",
 			ServerKeyPath:  "./certificates/server-key.pem",
+			TlsEnabled:     true,
 		}
 		_, err := creds.LoadClientCredentials()
 		if err != nil {
@@ -72,6 +75,7 @@ func TestLoadClientCredentials(t *testing.T) {
 			CACertPath:     "./certificates/ca-cert.pem",
 			ServerCertPath: "./certificates/server-cert.pem",
 			ServerKeyPath:  "./certificates/server-key.pem",
+			TlsEnabled:     true,
 		}
 		creds.CACertPath = "/dev/null"
 		_, err := creds.LoadClientCredentials()

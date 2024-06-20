@@ -3,7 +3,6 @@ package hub
 import (
 	"context"
 	"fmt"
-	"google.golang.org/grpc/credentials"
 	"net"
 	"strconv"
 	"sync"
@@ -21,12 +20,13 @@ type RpcReply struct {
 
 var GetConnectionOnHostList = GetConnectionOnHostListFn
 
-func GetConnectionOnHostListFn(credentials credentials.TransportCredentials, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
+func GetConnectionOnHostListFn(opts []grpc.DialOption, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
 	addressConnectionMap := make(map[string]idl.AgentClient)
+
 	for _, address := range hostList {
 		if _, ok := addressConnectionMap[address]; !ok {
 			addressUrl := net.JoinHostPort(address, strconv.Itoa(agentPort))
-			conn, err := grpc.NewClient(addressUrl, grpc.WithTransportCredentials(credentials))
+			conn, err := grpc.NewClient(addressUrl, opts...)
 			if err != nil {
 				return nil, fmt.Errorf("could not connect to agent on host %s: %w", addressUrl, err)
 			}
@@ -41,12 +41,14 @@ func GetConnectionOnHostListFn(credentials credentials.TransportCredentials, age
 // ConnectHostList connects to given hostlist on the agent port, returns map of agent-address and connection
 // if fails, returns error.
 func (s *Server) ConnectHostList(hostList []string) (map[string]idl.AgentClient, error) {
+	var opts []grpc.DialOption
 	credentials, err := s.Credentials.LoadClientCredentials()
 	if err != nil {
 		return nil, err
 	}
+	opts = append(opts, grpc.WithTransportCredentials(credentials))
 
-	return GetConnectionOnHostList(credentials, s.AgentPort, hostList)
+	return GetConnectionOnHostList(opts, s.AgentPort, hostList)
 }
 func (s *Server) GetAllHostNames(ctx context.Context, request *idl.GetAllHostNamesRequest) (*idl.GetAllHostNamesReply, error) {
 	gplog.Debug("Starting with rpc GetAllHostNames")

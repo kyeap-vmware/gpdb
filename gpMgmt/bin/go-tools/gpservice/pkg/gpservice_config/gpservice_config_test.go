@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
 	"os/exec"
@@ -37,6 +38,7 @@ func TestConfig(t *testing.T) {
 			CACertPath:     "ca-cert",
 			ServerCertPath: "server-cert",
 			ServerKeyPath:  "server-key",
+			TlsEnabled:     true,
 		},
 	}
 
@@ -53,7 +55,7 @@ func TestConfig(t *testing.T) {
 		defer utils.ResetSystemFunctions()
 
 		filepath := filepath.Join(t.TempDir(), constants.ConfigFileName)
-		err := gpservice_config.Create(filepath, expected.HubPort, expected.AgentPort, expected.Hostnames, expected.LogDir, expected.ServiceName, expected.GpHome, expected.Credentials)
+		err := gpservice_config.Create(filepath, expected.HubPort, expected.AgentPort, expected.Hostnames, expected.LogDir, expected.ServiceName, expected.GpHome, expected.Credentials, false)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -170,6 +172,19 @@ func TestConfig(t *testing.T) {
 		expectedErrPrefix := fmt.Sprintf("could not parse service config file %s:", expectedFilepath)
 		if !strings.HasPrefix(err.Error(), expectedErrPrefix) {
 			t.Fatalf("got %v, want %s", err, expectedErrPrefix)
+		}
+	})
+}
+
+func TestConnectToHub(t *testing.T) {
+	testhelper.SetupTestLogger()
+
+	hubConfig := testutils.CreateDummyServiceConfig(t)
+
+	t.Run("successfully connects to hub", func(t *testing.T) {
+		_, err := gpservice_config.ConnectToHub(hubConfig)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 }

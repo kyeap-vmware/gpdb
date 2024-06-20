@@ -55,7 +55,7 @@ func TestStartCmd(t *testing.T) {
 			gomock.Any(),
 		).Return(&idl.StartAgentsReply{}, nil)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		_, err := testutils.ExecuteCobraCommand(t, cli.StartCmd(), "--agent")
 		if err != nil {
@@ -85,7 +85,7 @@ func TestStartCmd(t *testing.T) {
 			gomock.Any(),
 		).Return(&idl.StartAgentsReply{}, nil)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		_, err := testutils.ExecuteCobraCommand(t, cli.StartCmd())
 		if err != nil {
@@ -133,7 +133,7 @@ func TestStartCmd(t *testing.T) {
 			gomock.Any(),
 		).Return(&idl.StartAgentsReply{}, expectedErr)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		testutils.ExecuteCobraCommand(t, cli.StartCmd())
 
@@ -171,7 +171,7 @@ func TestStartCmd(t *testing.T) {
 			},
 		}, nil)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()

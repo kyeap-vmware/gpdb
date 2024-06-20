@@ -49,7 +49,7 @@ func TestStatusCmd(t *testing.T) {
 			},
 		}, nil)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
@@ -123,7 +123,7 @@ Agent     sdw1      running   123       5H
 			gomock.Any(),
 		).Return(&idl.StatusAgentsReply{}, expectedErr)
 		gpservice_config.SetConnectToHub(client)
-		defer gpservice_config.ResetConnectToHub()
+		defer gpservice_config.ResetConfigFunctions()
 
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()

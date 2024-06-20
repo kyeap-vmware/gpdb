@@ -25,7 +25,6 @@ type Config struct {
 	ServiceName string
 	GpHome      string
 	LogDir      string
-
 	Credentials utils.Credentials
 }
 
@@ -67,8 +66,7 @@ func (s *Server) Start() error {
 
 	grpcServer := grpc.NewServer(
 		grpc.Creds(credentials),
-		grpc.UnaryInterceptor(interceptor),
-	)
+		grpc.UnaryInterceptor(interceptor))
 
 	healthcheck := health.NewServer()
 	healthgrpc.RegisterHealthServer(grpcServer, healthcheck)

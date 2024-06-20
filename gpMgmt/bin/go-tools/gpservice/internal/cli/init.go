@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -31,6 +32,7 @@ var (
 	serverCertPath string
 	serverKeyPath  string
 	serviceName    string
+	noTlsFlag      bool
 
 	GetUlimitSsh = GetUlimitSshFn
 )
@@ -62,15 +64,7 @@ func InitCmd() *cobra.Command {
 	initCmd.Flags().StringArrayVar(&hostnames, "host", []string{}, `Segment hostname`)
 	initCmd.Flags().StringVar(&hostfilePath, "hostfile", "", `Path to file containing a list of segment hostnames`)
 	initCmd.MarkFlagsMutuallyExclusive("host", "hostfile")
-
-	requiredFlags := []string{
-		"ca-certificate",
-		"server-certificate",
-		"server-key",
-	}
-	for _, flag := range requiredFlags {
-		initCmd.MarkFlagRequired(flag) // nolint
-	}
+	initCmd.Flags().BoolVar(&noTlsFlag, "no-tls", false, "set this flag if need to run hub and agents without transport layer security (TLS)")
 
 	viper.BindPFlag("gphome", initCmd.Flags().Lookup("gphome")) // nolint
 	gpHome = viper.GetString("gphome")
@@ -81,6 +75,18 @@ func InitCmd() *cobra.Command {
 func RunConfigure(cmd *cobra.Command) error {
 	if gpHome == "" {
 		return fmt.Errorf("not a valid gpHome found\n")
+	}
+
+	if noTlsFlag && (cmd.Flags().Lookup("ca-certificate").Changed ||
+		cmd.Flags().Lookup("server-certificate").Changed ||
+		cmd.Flags().Lookup("server-key").Changed) {
+		return fmt.Errorf("cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates")
+	}
+
+	if !noTlsFlag && (!cmd.Flags().Lookup("ca-certificate").Changed ||
+		!cmd.Flags().Lookup("server-certificate").Changed ||
+		!cmd.Flags().Lookup("server-key").Changed) {
+		return fmt.Errorf("one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags")
 	}
 
 	// Regenerate default flag values if a custom GPHOME or username is passed
@@ -112,13 +118,28 @@ func RunConfigure(cmd *cobra.Command) error {
 	if len(hostnames) < 1 {
 		return fmt.Errorf("no host name found, please provide a valid input host name using either --host or --hostfile")
 	}
+	credentials := &utils.GpCredentials{}
 
-	credentials := &utils.GpCredentials{
-		CACertPath:     caCertPath,
-		ServerCertPath: serverCertPath,
-		ServerKeyPath:  serverKeyPath,
+	if !noTlsFlag {
+		credentials = &utils.GpCredentials{
+			CACertPath:     caCertPath,
+			ServerCertPath: serverCertPath,
+			ServerKeyPath:  serverKeyPath,
+			TlsEnabled:     true,
+		}
+		if _, err := os.Stat(caCertPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("ca-certificate file %s does not exists. Please make sure file exists before starting services", caCertPath)
+		}
+		if _, err := os.Stat(serverCertPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("server-certificate file %s does not exists. Please make sure file exists before starting services", serverCertPath)
+		}
+		if _, err := os.Stat(serverKeyPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("server-key file %s does not exists. Please make sure file exists before starting services", serverKeyPath)
+		}
+	} else {
+		credentials.TlsEnabled = false
 	}
-	err = config.Create(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials)
+	err = config.Create(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials, false)
 	if err != nil {
 		return err
 	}

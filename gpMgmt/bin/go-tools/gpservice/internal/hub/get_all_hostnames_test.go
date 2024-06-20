@@ -6,7 +6,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/greenplum-db/gpdb/gpservice/idl/mock_idl"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc"
 	"reflect"
 	"strings"
 	"testing"
@@ -34,9 +34,10 @@ func TestServer_GetAllHostNames(t *testing.T) {
 			{AgentClient: sdw1, Hostname: "sdw1"},
 			{AgentClient: sdw2, Hostname: "sdw2"},
 		}
-		hub.GetConnectionOnHostList = func(credentials credentials.TransportCredentials, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
+		hub.GetConnectionOnHostList = func(opts []grpc.DialOption, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
 			return map[string]idl.AgentClient{"sdw1": sdw1, "sdw2": sdw2}, nil
 		}
+
 		defer func() { hub.GetConnectionOnHostList = hub.GetConnectionOnHostListFn }()
 
 		hubServer.Conns = agentConns
@@ -59,7 +60,7 @@ func TestServer_GetAllHostNames(t *testing.T) {
 			{AgentClient: sdw1, Hostname: "sdw1"},
 			{AgentClient: sdw2, Hostname: "sdw2"},
 		}
-		hub.GetConnectionOnHostList = func(credentials credentials.TransportCredentials, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
+		hub.GetConnectionOnHostList = func(opts []grpc.DialOption, agentPort int, hostList []string) (map[string]idl.AgentClient, error) {
 			return map[string]idl.AgentClient{"sdw1": sdw1, "sdw2": sdw2}, nil
 		}
 		defer func() { hub.GetConnectionOnHostList = hub.GetConnectionOnHostListFn }()
