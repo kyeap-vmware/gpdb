@@ -24,6 +24,7 @@ The following Greenplum Database and PostgreSQL `contrib` modules are installed;
 -   [orafce](orafce_ref.html) - Provides Greenplum Database-specific Oracle SQL compatibility functions.
 -   [pageinspect](pageinspect.html) - Provides functions for low level inspection of the contents of database pages; available to superusers only.
 -   [pg_cron](pg_cron.html) -  Provides a cron-based job scheduler that runs inside the database.
+-   [pg_hint_plan](pg_hint_plan.html) -  Provides functions for tweaking PostgreSQL execution plans with hints in SQL comments.
 -   [pg\_trgm](pg_trgm.html) - Provides functions and operators for determining the similarity of alphanumeric text based on trigram matching. The module also provides index operator classes that support fast searching for similar strings.
 -   [pg_buffercache](pg_buffercache.html) - Provides access to five views for obtaining cluster-wide shared buffer metrics.
 -   [pgcrypto](pgcrypto.html) - Provides cryptographic functions for Greenplum Database.

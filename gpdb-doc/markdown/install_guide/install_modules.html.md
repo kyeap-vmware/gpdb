@@ -40,6 +40,7 @@ You can register the following modules in this manner:
 <li class="li"><a class="xref" href="../ref_guide/modules/orafce_ref.html">orafce</a> (VMware Greenplum only)</li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pageinspect.html">pageinspect</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pg_trgm.html">pg_trgm</a></li>
+<li class="li"><a class="xref" href="../ref_guide/modules/pg_hint_plan.html">pg_hint_plan</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pgcrypto.html">pgcrypto</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/pgvector/pgvector.html">pgvector</a></li>
 <li class="li"><a class="xref" href="../ref_guide/modules/postgres_fdw.html">postgres_fdw</a></li>
@@ -56,4 +57,3 @@ You can register the following modules in this manner:
 For additional information about the modules supplied with Greenplum Database, refer to [Additional Supplied Modules](../ref_guide/modules/intro.html) in the *Greenplum Database Reference Guide*.
 
 **Parent topic:** [Installing and Upgrading Greenplum](install_guide.html)
-
