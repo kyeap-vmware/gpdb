@@ -445,24 +445,13 @@ resources:
   {% endif %}
 {% endif %}
 
-## FIXME: we use a temporary gpdb binary from a dev pipeline, in order to workaround 
-## the binswap before we can use the 7.2.0 product release version. Revert this change, 
-## when 7.2.0 is released and point pivotal-gpdb-pivnet-product-version to 7.2.0.
 {% if os_type == "rhel8" or os_type == "oel8" or os_type == "rocky8" %}
-#- name: previous_gpdb
-#  type: tanzunet
-#  source:
-#    api_token: ((pivotal-gpdb-pivnet-api-token))
-#    product_slug: pivotal-gpdb
-#    version: ((pivotal-gpdb-pivnet-product-version))
 - name: previous_gpdb
   type: gcs
   source:
-# FIXME: hard coded until we do the 7.2.0 tagging. Revert to ((gcs-bucket-intermediates))
-# once 7.2.0 is tagged.
-    bucket: pivotal-gpdb-concourse-resources-intermediates-dev
+    bucket: pivotal-gpdb-concourse-resources-prod
     json_key: ((concourse-gcs-resources-service-account-key))
-    versioned_file: addcol-binswap-rc-only/bin_gpdb/bin_gpdb.tar.gz
+    regexp: server/released/gpdb7/greenplum-db-((binswap-test-gpdb-version))-(.*)-[[ dist ]]-x86_64.rpm
 {% endif %}
 
 {% if os_type != compile_platform %}

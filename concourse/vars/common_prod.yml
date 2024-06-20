@@ -35,4 +35,4 @@ remote_win_host_build: 10.0.42.5
 remote_win_user_build: buildbot
 remote_win_port_build: 22
 test-binary-swap: true
-pivotal-gpdb-pivnet-product-version: ^7\.0\.0-beta.5$
+binswap-test-gpdb-version: 7.2.0
