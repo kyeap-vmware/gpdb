@@ -17,7 +17,7 @@ func TestStopSuccess(t *testing.T) {
 	)
 	t.Run("stop services successfully", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		expectedOut := []string{
 			"Agent service stopped successfully",
@@ -25,7 +25,7 @@ func TestStopSuccess(t *testing.T) {
 		}
 
 		// Running the gpservice stop command for services
-		result, err := testutils.RunStop()
+		result, err := testutils.RunGpserviceStop()
 		// check for command result
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
@@ -54,12 +54,12 @@ func TestStopSuccess(t *testing.T) {
 
 	t.Run("stop hub successfully", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart("--hub")
+		_, _ = testutils.RunGpserviceStart("--hub")
 
 		expectedOut := "Hub service stopped successfully"
 
 		// Running the gp stop command for hub
-		result, err := testutils.RunStop("--hub")
+		result, err := testutils.RunGpserviceStop("--hub")
 		// check for command result
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
@@ -78,12 +78,12 @@ func TestStopSuccess(t *testing.T) {
 
 	t.Run("stop agents successfully", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		expectedOut := "Agent service stopped successfully"
 
 		// Running the gp stop command for agents
-		result, err := testutils.RunStop("--agent")
+		result, err := testutils.RunGpserviceStop("--agent")
 		// check for command result
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
@@ -101,12 +101,12 @@ func TestStopSuccess(t *testing.T) {
 			testutils.VerifySvcNotRunning(t, status.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop("--hub")
+		_, _ = testutils.RunGpserviceStop("--hub")
 	})
 
 	t.Run("stop services command with --verbose shows status details", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		cliParams := []string{
 			"--verbose",
@@ -116,7 +116,7 @@ func TestStopSuccess(t *testing.T) {
 			"Hub service stopped successfully",
 		}
 
-		result, err := testutils.RunStop(cliParams...)
+		result, err := testutils.RunGpserviceStop(cliParams...)
 		// check for command result
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
@@ -172,9 +172,9 @@ func TestStopSuccessHelp(t *testing.T) {
 	for _, tc := range TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.InitService(*hostfile, testutils.CertificateParams)
-			_, _ = testutils.RunStart()
+			_, _ = testutils.RunGpserviceStart()
 
-			result, err := testutils.RunStop(tc.cliParams...)
+			result, err := testutils.RunGpserviceStop(tc.cliParams...)
 			// check for command result
 			if err != nil {
 				t.Errorf("\nUnexpected error: %#v", err)

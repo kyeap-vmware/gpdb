@@ -197,3 +197,97 @@ func TestConfigureFailure(t *testing.T) {
 		})
 	}
 }
+
+// TODO: Below cases needs to be corrected if the error messages are changed for individual params
+func TestConfigureCertificateFailure(t *testing.T) {
+	// creating empty hostfile for test
+	_ = os.WriteFile(mockHostFile, []byte(""), 0644)
+
+	var ConfigureFailTestCases = []struct {
+		name        string
+		cliParams   []string
+		expectedOut []string
+	}{
+
+		{
+			name: "configure fails when --server-certificate  parameter is missing",
+			cliParams: []string{
+				"--host", testutils.DefaultHost,
+				"--ca-certificate", "/tmp/certificates/ca-cert.pem",
+				"--server-key", "/tmp/certificates/server-key.pem",
+			},
+			expectedOut: []string{
+				"[ERROR]:-one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags",
+			},
+		},
+		{
+			name: "configure fails when --server-key parameter is missing",
+			cliParams: []string{
+				"--host", testutils.DefaultHost,
+				"--ca-certificate", "/tmp/certificates/ca-cert.pem",
+				"--server-certificate", "/tmp/certificates/server-cert.pem",
+			},
+			expectedOut: []string{
+				"[ERROR]:-one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags",
+			},
+		},
+		{
+			name: "configure fails when --ca-certificate parameter is missing",
+			cliParams: []string{
+				"--host", testutils.DefaultHost,
+				"--server-certificate", "/tmp/certificates/server-cert.pem",
+				"--server-key", "/tmp/certificates/server-key.pem",
+			},
+			expectedOut: []string{
+				"[ERROR]:-one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags",
+			},
+		},
+	}
+	for _, tc := range ConfigureFailTestCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := testutils.RunConfigure(false, tc.cliParams...)
+			if err == nil {
+				t.Errorf("\nExpected error Got: %#v", err)
+			}
+			if result.ExitCode != testutils.ExitCode1 {
+				t.Errorf("\nExpected: %#v \nGot: %v", testutils.ExitCode1, result.ExitCode)
+			}
+			for _, item := range tc.expectedOut {
+				if !strings.Contains(result.OutputMsg, item) {
+					t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+				}
+			}
+			if strings.Contains(result.OutputMsg, "panic") {
+				t.Errorf("\nUnexpected string: %#v \nFound in: %#v", "panic", result.OutputMsg)
+			}
+		})
+	}
+}
+func TestConfigureInvalidCertificateFailure(t *testing.T) {
+	// creating empty hostfile for test
+	_ = os.WriteFile(mockHostFile, []byte(""), 0644)
+
+	t.Run("configure service with --no-tls option", func(t *testing.T) {
+		cliParams := []string{
+			"--host", testutils.DefaultHost,
+			"--server-certificate", "/invalid/path/to/server-cert.pem",
+			"--server-key", "/invalid/path/to/server-key.pem",
+			"--ca-certificate", "/invalid/path/to/ca-cert.pem",
+		}
+		expectedOut := []string{
+			"Please make sure file exists before starting services",
+		}
+		result, err := testutils.RunConfigure(false, cliParams...)
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
+	})
+}

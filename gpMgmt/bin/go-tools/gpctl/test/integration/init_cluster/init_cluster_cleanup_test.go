@@ -113,11 +113,27 @@ func TestInitClusterCleanup(t *testing.T) {
 			value        cli.Segment
 			okSeg        bool
 		)
+		//delete services before intialising cluster with no services cofigured to check clean works fine
+		cliParams := []string{"services"}
+		expectedOut := []string{"Successfully deleted service configuration file", "Removed hub service file", "Successfully removed agent service file"}
+
+		result, err := testutils.RunGpServiceDelete(cliParams...)
+		if err != nil {
+			t.Errorf("\nUnexpected error: %#v", err)
+		}
+		if result.ExitCode != 0 {
+			t.Errorf("\nExpected: %v \nGot: %v", 0, result.ExitCode)
+		}
+		for _, item := range expectedOut {
+			if !strings.Contains(result.OutputMsg, item) {
+				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
+			}
+		}
 
 		configFile := testutils.GetTempFile(t, "config.json")
 		config := GetDefaultConfig(t)
 
-		err := config.WriteConfigAs(configFile)
+		err = config.WriteConfigAs(configFile)
 		if err != nil {
 			t.Fatalf("unexpected error: %#v", err)
 		}
@@ -138,7 +154,7 @@ func TestInitClusterCleanup(t *testing.T) {
 		dirDeleted := make(chan bool)
 		go SimulateError(dirDeleted, pSegPath, host, t)
 
-		result, err := testutils.RunInitCluster(configFile)
+		result, err = testutils.RunInitCluster(configFile)
 		if err != nil {
 			t.Fatalf("unexpected error: %s, %v", result.OutputMsg, err)
 		}

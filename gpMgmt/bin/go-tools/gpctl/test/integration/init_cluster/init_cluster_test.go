@@ -65,6 +65,63 @@ func TestInitCluster(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
+	t.Run("check if the cluster is created successfully with absolute path", func(t *testing.T) {
+		// Use absolute path
+		configFile := testutils.GetTempFile(t, "config.json")
+		absConfigFile, err := filepath.Abs(configFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %#v", err)
+		}
+
+		config := GetDefaultConfig(t)
+
+		err = config.WriteConfigAs(absConfigFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %#v", err)
+		}
+
+		result, err := testutils.RunInitCluster(absConfigFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %s, %v", result.OutputMsg, err)
+		}
+
+		expectedOut := "[INFO]:-Cluster initialized successfully"
+		if !strings.Contains(result.OutputMsg, expectedOut) {
+			t.Fatalf("got %q, want %q", result.OutputMsg, expectedOut)
+		}
+		_, err = testutils.DeleteCluster()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+	})
+
+	t.Run("check if the cluster is created successfully with relative path", func(t *testing.T) {
+		// Use relative path
+		configFile := "config.json"
+		relConfigFile := filepath.Join(".", configFile)
+
+		config := GetDefaultConfig(t)
+
+		err := config.WriteConfigAs(relConfigFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %#v", err)
+		}
+
+		result, err := testutils.RunInitCluster(relConfigFile)
+		if err != nil {
+			t.Fatalf("unexpected error: %s, %v", result.OutputMsg, err)
+		}
+
+		expectedOut := "[INFO]:-Cluster initialized successfully"
+		if !strings.Contains(result.OutputMsg, expectedOut) {
+			t.Fatalf("got %q, want %q", result.OutputMsg, expectedOut)
+		}
+		_, err = testutils.DeleteCluster()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
 
 	// /* FIXME:concurse is failing to resolve ip to hostname*/
 	// t.Run("check if the cluster is created successfully with hba host name set to true and run other utilities to verify - gpstop, gpstart, gpstate, gpcheckcat", func(t *testing.T) {
@@ -411,7 +468,8 @@ func TestPgHbaConfValidation(t *testing.T) {
 
 }
 
-func TestClusterCreationWithNoTls(t *testing.T) {
+func TestClusterCreationWithNoSvcRunningConfigured(t *testing.T) {
+	hosts := testutils.GetHostListFromFile(*hostfile)
 
 	testClusterCreationWithNoTls := func(t *testing.T) {
 		configFile := testutils.GetTempFile(t, "config.json")
@@ -433,14 +491,14 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 		}
 	}
 
-	t.Run("verify cluster creation with no TLS when services are not running", func(t *testing.T) {
+	t.Run("verify cluster creation when services are not running", func(t *testing.T) {
 		expectedOut := []string{
 			"Agent service stopped successfully",
 			"Hub service stopped successfully",
 		}
 
 		// stops the services before initliasing cluster with no tls
-		result, err := testutils.RunStop()
+		result, err := testutils.RunGpserviceStop()
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
@@ -454,13 +512,15 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 		}
 
 		testClusterCreationWithNoTls(t)
+		//verify that the services are not running
+		testutils.CheckServiceNotRunning(t, hosts)
 
 	})
-	t.Run("verify cluster creation with no TLS when services are not configured", func(t *testing.T) {
+	t.Run("verify cluster creation when services are not configured", func(t *testing.T) {
 		cliParams := []string{"services"}
 		expectedOut := []string{"Successfully deleted service configuration file", "Removed hub service file", "Successfully removed agent service file"}
 
-		result, err := testutils.RunDelete(cliParams...)
+		result, err := testutils.RunGpServiceDelete(cliParams...)
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
@@ -474,9 +534,13 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 		}
 		testClusterCreationWithNoTls(t)
 
+		//verify that the service files do not exist and services are not running
+		testutils.CheckServiceFilesNotExist(t, hosts)
+		testutils.CheckServiceNotRunning(t, hosts)
+
 	})
 
-	testExpansionWithNoTls := func(t *testing.T) {
+	testExpansionWithNoSvcConfigured := func(t *testing.T) {
 		configFile := testutils.GetTempFile(t, "config.json")
 		config := GetDefaultExpansionConfig(t)
 
@@ -496,14 +560,14 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 		}
 	}
 
-	t.Run("verify expansion with no TLS when services are not running", func(t *testing.T) {
+	t.Run("verify cluster creation with expansion config when gpservices are not running", func(t *testing.T) {
 		expectedOut := []string{
 			"Agent service stopped successfully",
 			"Hub service stopped successfully",
 		}
 
 		// stops the services before initliasing cluster with no tls
-		result, err := testutils.RunStop()
+		result, err := testutils.RunGpserviceStop()
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
@@ -516,14 +580,16 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 			}
 		}
 
-		testExpansionWithNoTls(t)
+		testExpansionWithNoSvcConfigured(t)
+		//verify that the services are not running
+		testutils.CheckServiceNotRunning(t, hosts)
 
 	})
-	t.Run("verify expansion with no TLS when services are not configured", func(t *testing.T) {
+	t.Run("verify cluster creation with expansion config when gpservices are not configured", func(t *testing.T) {
 		cliParams := []string{"services"}
 		expectedOut := []string{"Successfully deleted service configuration file", "Removed hub service file", "Successfully removed agent service file"}
 
-		result, err := testutils.RunDelete(cliParams...)
+		result, err := testutils.RunGpServiceDelete(cliParams...)
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
@@ -535,7 +601,10 @@ func TestClusterCreationWithNoTls(t *testing.T) {
 				t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
 			}
 		}
-		testExpansionWithNoTls(t)
+		testExpansionWithNoSvcConfigured(t)
+		//verify that the service files do not exist and services are not running
+		testutils.CheckServiceFilesNotExist(t, hosts)
+		testutils.CheckServiceNotRunning(t, hosts)
 
 	})
 }

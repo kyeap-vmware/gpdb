@@ -11,13 +11,13 @@ import (
 func TestStatusFailures(t *testing.T) {
 	t.Run("checking service status without configuration file will fail", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 		_ = testutils.CopyFile(testutils.DefaultConfigurationFile, "/tmp/config.conf")
 		_ = os.RemoveAll(testutils.DefaultConfigurationFile)
 
 		expectedOut := "could not open service config file"
 
-		result, err := testutils.RunStatus()
+		result, err := testutils.RunGpserviceStatus()
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -28,19 +28,19 @@ func TestStatusFailures(t *testing.T) {
 			t.Errorf("\nExpected string: %#v \nNot found in: %#v", expectedOut, result.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop("--config-file", "/tmp/config.conf")
+		_, _ = testutils.RunGpserviceStop("--config-file", "/tmp/config.conf")
 	})
 
 	t.Run("checking status of services after stopping hub will fail", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStop("--hub")
+		_, _ = testutils.RunGpserviceStop("--hub")
 
 		expectedOut := []string{
 			"Hub", "not running", "0",
 			"service must be running to get the agent status",
 		}
 
-		result, err := testutils.RunStatus()
+		result, err := testutils.RunGpserviceStatus()
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -56,7 +56,7 @@ func TestStatusFailures(t *testing.T) {
 
 	t.Run("checking status of services without certificates", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 		_ = testutils.CpCfgWithoutCertificates(configCopy)
 
 		cliParams := []string{
@@ -64,7 +64,7 @@ func TestStatusFailures(t *testing.T) {
 		}
 		expectedOut := "error while loading server certificate"
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -75,19 +75,19 @@ func TestStatusFailures(t *testing.T) {
 			t.Errorf("\nExpected string: %#v \nNot found in: %#v", expectedOut, result.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("checking service status with no value for --config-file will fail", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		cliParams := []string{
 			"--config-file",
 		}
 		expectedOut := "flag needs an argument: --config-file"
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -98,19 +98,19 @@ func TestStatusFailures(t *testing.T) {
 			t.Errorf("\nExpected string: %#v \nNot found in: %#v", expectedOut, result.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("checking service status with non-existing file for --config-file will fail", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		cliParams := []string{
 			"--config-file", "file",
 		}
 		expectedOut := "no such file or directory"
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -121,19 +121,19 @@ func TestStatusFailures(t *testing.T) {
 			t.Errorf("\nExpected string: %#v \nNot found in: %#v", expectedOut, result.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("checking service status with empty string for --config-file will fail", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		cliParams := []string{
 			"--config-file", "",
 		}
 		expectedOut := "no such file or directory"
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -144,7 +144,7 @@ func TestStatusFailures(t *testing.T) {
 			t.Errorf("\nExpected string: %#v \nNot found in: %#v", expectedOut, result.OutputMsg)
 		}
 
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("checking status of services command with invalid param shows help", func(t *testing.T) {
@@ -157,7 +157,7 @@ func TestStatusFailures(t *testing.T) {
 			"Error: unknown command \"invalid\" for \"gpservice status\"",
 		}, testutils.CommonHelpText...)
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}

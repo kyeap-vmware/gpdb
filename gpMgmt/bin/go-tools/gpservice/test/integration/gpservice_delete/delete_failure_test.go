@@ -14,7 +14,7 @@ func TestDeleteFailure(t *testing.T) {
 	t.Run("delete services fails when services are not configured", func(t *testing.T) {
 		expectedOut := []string{"could not open service config file"}
 
-		result, err := testutils.RunDelete("services")
+		result, err := testutils.RunGpServiceDelete("services")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -37,7 +37,7 @@ func TestDeleteFailure(t *testing.T) {
 		_ = testutils.CopyFile(testutils.DefaultConfigurationFile, "/tmp/config.conf")
 		_ = os.RemoveAll(testutils.DefaultConfigurationFile)
 
-		result, err := testutils.RunDelete("services")
+		result, err := testutils.RunGpServiceDelete("services")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -58,7 +58,7 @@ func TestDeleteFailure(t *testing.T) {
 
 		testutils.DisableandDeleteHubServiceFile(p, "gpservice_hub")
 
-		result, err := testutils.RunDelete("services")
+		result, err := testutils.RunGpServiceDelete("services")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -79,7 +79,7 @@ func TestDeleteFailure(t *testing.T) {
 
 		testutils.DisableandDeleteAgentServiceFile(p, "gpservice_agent")
 
-		result, err := testutils.RunDelete("services")
+		result, err := testutils.RunGpServiceDelete("services")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}

@@ -32,7 +32,7 @@ func TestDeleteSuccess(t *testing.T) {
 	})
 	t.Run("delete services successfully when services are started", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart("services")
+		_, _ = testutils.RunGpserviceStart("services")
 		cliParams := []string{"services"}
 		expectedOut := []string{"Successfully deleted service configuration", "Removed hub service file", "Successfully removed agent service file"}
 
@@ -55,7 +55,7 @@ func TestDeleteSuccess(t *testing.T) {
 			"--hostfile", *hostfile,
 			"--service-name", "dummySvc",
 		}...)
-		_, _ = testutils.RunStart("services")
+		_, _ = testutils.RunGpserviceStart("services")
 		cliParams := []string{"services"}
 		expectedOut := []string{"-Successfully deleted service configuration", "Removed hub service file", "Successfully removed agent service file"}
 
@@ -74,7 +74,7 @@ func TestDeleteSuccess(t *testing.T) {
 	})
 }
 func runDeleteCmdAndCheckOutput(t *testing.T, input []string, output []string) {
-	result, err := testutils.RunDelete(input...)
+	result, err := testutils.RunGpServiceDelete(input...)
 	// check for command result
 	if err != nil {
 		t.Errorf("\nUnexpected error: %#v", err)

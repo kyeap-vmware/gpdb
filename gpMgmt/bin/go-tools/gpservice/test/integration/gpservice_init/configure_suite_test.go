@@ -74,5 +74,5 @@ func TestMain(m *testing.M) {
 }
 
 func tearDownTest() {
-	testutils.RunDelete()
+	testutils.RunGpServiceDelete()
 }

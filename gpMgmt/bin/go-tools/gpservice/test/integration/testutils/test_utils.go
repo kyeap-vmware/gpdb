@@ -38,7 +38,7 @@ func ConfigureAndStartServices(hostfile string) error {
 		return fmt.Errorf("failed to configure the services: %v, %v", result.OutputMsg, err)
 	}
 
-	result, err = RunStart()
+	result, err = RunGpserviceStart()
 	if err != nil {
 		return fmt.Errorf("failed to start the services: %v, %v", result.OutputMsg, err)
 	}
@@ -47,7 +47,7 @@ func ConfigureAndStartServices(hostfile string) error {
 	timeout := 10 * time.Second
 
 	for {
-		result, err := RunStatus()
+		result, err := RunGpserviceStatus()
 		if err == nil {
 			return nil
 		}
@@ -77,7 +77,7 @@ func RunConfigure(useCert bool, params ...string) (CmdResult, error) {
 	return runCmd(genCmd)
 }
 
-func RunStart(params ...string) (CmdResult, error) {
+func RunGpserviceStart(params ...string) (CmdResult, error) {
 	params = append([]string{"start"}, params...)
 	genCmd := Command{
 		cmdStr: constants.DefaultServiceName,
@@ -86,7 +86,7 @@ func RunStart(params ...string) (CmdResult, error) {
 	return runCmd(genCmd)
 }
 
-func RunStop(params ...string) (CmdResult, error) {
+func RunGpserviceStop(params ...string) (CmdResult, error) {
 	params = append([]string{"stop"}, params...)
 	genCmd := Command{
 		cmdStr: constants.DefaultServiceName,
@@ -95,7 +95,7 @@ func RunStop(params ...string) (CmdResult, error) {
 	return runCmd(genCmd)
 }
 
-func RunStatus(params ...string) (CmdResult, error) {
+func RunGpserviceStatus(params ...string) (CmdResult, error) {
 	params = append([]string{"status"}, params...)
 	genCmd := Command{
 		cmdStr: constants.DefaultServiceName,
@@ -104,7 +104,7 @@ func RunStatus(params ...string) (CmdResult, error) {
 	return runCmd(genCmd)
 }
 
-func RunDelete(params ...string) (CmdResult, error) {
+func RunGpServiceDelete(params ...string) (CmdResult, error) {
 	params = append([]string{"delete"}, params...)
 	genCmd := Command{
 		cmdStr: constants.DefaultServiceName,
@@ -521,4 +521,48 @@ func CheckifdataDirIsEmpty(hostmap map[string][]string) (CmdResult, error) {
 		}
 	}
 	return result, err
+}
+
+func CheckServiceFilesNotExist(t *testing.T, hosts []string) {
+	t.Helper()
+	var (
+		defaultServiceDir string
+		serviceExt        string
+	)
+	p := platform.GetPlatform()
+	defaultServiceDir, serviceExt, _ = GetServiceDetails(p)
+
+	agentFile := fmt.Sprintf("%s/%s_%s.%s", defaultServiceDir, constants.DefaultServiceName, "agent", serviceExt)
+	hubFile := fmt.Sprintf("%s/%s_%s.%s", defaultServiceDir, constants.DefaultServiceName, "hub", serviceExt)
+
+	//check if file exists on agents
+	cmdStr := fmt.Sprintf("/bin/bash -c 'test -e %s && echo 1'", agentFile)
+	for _, host := range hosts {
+		cmd := exec.Command("ssh", host, cmdStr)
+		out, _ := cmd.CombinedOutput()
+		if strings.TrimSpace(string(out)) != "1" {
+			t.Errorf("File %s found on %s", agentFile, host)
+		}
+	}
+	//check if services files exists on hub
+	if _, err := os.Stat(hubFile); err == nil {
+		t.Errorf("File %s found", hubFile)
+	}
+
+}
+
+func CheckServiceNotRunning(t *testing.T, hosts []string) {
+	t.Helper()
+	p := platform.GetPlatform()
+
+	for _, svc := range []string{"gpservice_hub", "gpservice_agent"} {
+		hostList := hosts[:1]
+		if svc == "gpservice_agent" {
+			hostList = hosts
+		}
+		for _, host := range hostList {
+			status, _ := GetSvcStatusOnHost(p.(platform.GpPlatform), svc, host)
+			VerifySvcNotRunning(t, status.OutputMsg)
+		}
+	}
 }

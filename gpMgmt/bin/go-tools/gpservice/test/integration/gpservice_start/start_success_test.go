@@ -28,7 +28,7 @@ func TestStartSuccess(t *testing.T) {
 		status, _ := testutils.GetSvcStatusOnHost(p.(platform.GpPlatform), gpserviceHub, hosts[0])
 		testutils.VerifyServicePIDOnPort(t, status.OutputMsg, constants.DefaultHubPort, hosts[0])
 
-		_, _ = testutils.RunStop("--hub")
+		_, _ = testutils.RunGpserviceStop("--hub")
 	})
 
 	t.Run("start hub and agents successfully", func(t *testing.T) {
@@ -52,7 +52,7 @@ func TestStartSuccess(t *testing.T) {
 				testutils.VerifyServicePIDOnPort(t, status.OutputMsg, listeningPort, host)
 			}
 		}
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	//need to check if this is expected message, message coming as "[INFO]:-Hub started successfully"
@@ -80,7 +80,7 @@ func TestStartSuccess(t *testing.T) {
 				testutils.VerifyServicePIDOnPort(t, status.OutputMsg, listeningPort, host)
 			}
 		}
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("start services with --verbose param shows sevice status", func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestStartSuccess(t *testing.T) {
 				testutils.VerifyServicePIDOnPort(t, status.OutputMsg, listeningPort, host)
 			}
 		}
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 	t.Run("start hub with --verbose param shows hub status", func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestStartSuccess(t *testing.T) {
 		status, _ := testutils.GetSvcStatusOnHost(p.(platform.GpPlatform), gpserviceHub, hosts[0])
 		testutils.VerifyServicePIDOnPort(t, status.OutputMsg, constants.DefaultHubPort, hosts[0])
 
-		_, _ = testutils.RunStop("--hub")
+		_, _ = testutils.RunGpserviceStop("--hub")
 	})
 }
 
@@ -159,7 +159,7 @@ func TestStartSuccessHelp(t *testing.T) {
 
 func runStartCmdAndCheckOutput(t *testing.T, input []string, output []string) {
 	testutils.InitService(*hostfile, testutils.CertificateParams)
-	result, err := testutils.RunStart(input...)
+	result, err := testutils.RunGpserviceStart(input...)
 	// check for command result
 	if err != nil {
 		t.Errorf("\nUnexpected error: %#v", err)

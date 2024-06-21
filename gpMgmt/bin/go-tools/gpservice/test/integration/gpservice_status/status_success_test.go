@@ -53,11 +53,11 @@ func TestStatusSuccess(t *testing.T) {
 	for _, tc := range StatusSuccessTestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.InitService(*hostfile, testutils.CertificateParams)
-			_, _ = testutils.RunStart()
+			_, _ = testutils.RunGpserviceStart()
 			gpCfg = testutils.ParseConfig(testutils.DefaultConfigurationFile)
 
 			// Running the gpservice status command
-			result, err := testutils.RunStatus(tc.cliParams...)
+			result, err := testutils.RunGpserviceStatus(tc.cliParams...)
 			// check for command result
 			if err != nil {
 				t.Errorf("\nUnexpected error: %#v", err)
@@ -84,7 +84,7 @@ func TestStatusSuccess(t *testing.T) {
 					testutils.VerifyServicePIDOnPort(t, pid, listeningPort, host)
 				}
 			}
-			_, _ = testutils.RunStop()
+			_, _ = testutils.RunGpserviceStop()
 		})
 	}
 }
@@ -93,7 +93,7 @@ func TestStatusSuccessWithoutDefaultService(t *testing.T) {
 	t.Run("status services when gp installed with --service-name param", func(t *testing.T) {
 		params := append(testutils.CertificateParams, []string{"--service-name", "dummySvc"}...)
 		testutils.InitService(*hostfile, params)
-		_, _ = testutils.RunStart()
+		_, _ = testutils.RunGpserviceStart()
 
 		cliParams := []string{
 			"--verbose",
@@ -106,7 +106,7 @@ func TestStatusSuccessWithoutDefaultService(t *testing.T) {
 
 		gpCfg = testutils.ParseConfig(testutils.DefaultConfigurationFile)
 
-		result, err := testutils.RunStatus(cliParams...)
+		result, err := testutils.RunGpserviceStatus(cliParams...)
 		// check for command result
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
@@ -133,7 +133,7 @@ func TestStatusSuccessWithoutDefaultService(t *testing.T) {
 				testutils.VerifyServicePIDOnPort(t, pid, listeningPort, host)
 			}
 		}
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 	})
 
 }
@@ -167,8 +167,8 @@ func TestStatusSuccessHelp(t *testing.T) {
 	for _, tc := range TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.InitService(*hostfile, testutils.CertificateParams)
-			_, _ = testutils.RunStart()
-			result, err := testutils.RunStatus(tc.cliParams...)
+			_, _ = testutils.RunGpserviceStart()
+			result, err := testutils.RunGpserviceStatus(tc.cliParams...)
 			// check for command result
 			if err != nil {
 				t.Errorf("\nUnexpected error: %#v", err)

@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 	os.Setenv("PGPORT", strconv.Itoa(testutils.DEFAULT_COORDINATOR_PORT))
 
 	exitCode := m.Run()
-	testutils.RunStop() //nolint
+	testutils.RunGpserviceStop() //nolint
 
 	os.Exit(exitCode)
 }

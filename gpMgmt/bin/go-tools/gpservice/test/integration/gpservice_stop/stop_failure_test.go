@@ -12,14 +12,14 @@ func TestStopFailsWithoutSvcRunning(t *testing.T) {
 
 	t.Run("stop agents fails when hub is not running", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStart()
-		_, _ = testutils.RunStop("--hub")
+		_, _ = testutils.RunGpserviceStart()
+		_, _ = testutils.RunGpserviceStop("--hub")
 
 		expectedOut := []string{
 			"[ERROR]:-failed to stop agent service",
 		}
 
-		result, err := testutils.RunStop("--agent")
+		result, err := testutils.RunGpserviceStop("--agent")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -35,11 +35,11 @@ func TestStopFailsWithoutSvcRunning(t *testing.T) {
 
 	t.Run("stop services fails when services are not running", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 
 		expectedOut := "The services may already be stopped. Use `gpservice status` to check the status"
 
-		result, err := testutils.RunStop()
+		result, err := testutils.RunGpserviceStop()
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -54,10 +54,10 @@ func TestStopFailsWithoutSvcRunning(t *testing.T) {
 
 	t.Run("stop hub fails when hub is not running", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 
 		expectedOut := "The services may already be stopped. Use `gpservice status` to check the status"
-		result, err := testutils.RunStop("--hub")
+		result, err := testutils.RunGpserviceStop("--hub")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -71,10 +71,10 @@ func TestStopFailsWithoutSvcRunning(t *testing.T) {
 
 	t.Run("stop agents fails when services are not running", func(t *testing.T) {
 		testutils.InitService(*hostfile, testutils.CertificateParams)
-		_, _ = testutils.RunStop()
+		_, _ = testutils.RunGpserviceStop()
 
 		expectedOut := "The services may already be stopped. Use `gpservice status` to check the status"
-		result, err := testutils.RunStop("--agent")
+		result, err := testutils.RunGpserviceStop("--agent")
 		if err == nil {
 			t.Errorf("\nExpected error Got: %#v", err)
 		}
@@ -120,11 +120,11 @@ func TestStopFailureWithoutConfig(t *testing.T) {
 	}
 	for _, tc := range TestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, _ = testutils.RunStart()
+			_, _ = testutils.RunGpserviceStart()
 			_ = testutils.CopyFile(testutils.DefaultConfigurationFile, "/tmp/config.conf")
 			_ = os.RemoveAll(testutils.DefaultConfigurationFile)
 
-			result, err := testutils.RunStop(tc.cliParams...)
+			result, err := testutils.RunGpserviceStop(tc.cliParams...)
 			if err == nil {
 				t.Errorf("\nExpected error Got: %#v", err)
 			}
@@ -136,7 +136,7 @@ func TestStopFailureWithoutConfig(t *testing.T) {
 					t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
 				}
 			}
-			_, _ = testutils.RunStop("--config-file", "/tmp/config.conf")
+			_, _ = testutils.RunGpserviceStop("--config-file", "/tmp/config.conf")
 		})
 	}
 }
@@ -178,10 +178,10 @@ func TestStopFailsWithoutCertificates(t *testing.T) {
 	for _, tc := range TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.InitService(*hostfile, testutils.CertificateParams)
-			_, _ = testutils.RunStart()
+			_, _ = testutils.RunGpserviceStart()
 			_ = testutils.CpCfgWithoutCertificates(configCopy)
 
-			result, err := testutils.RunStop(tc.cliParams...)
+			result, err := testutils.RunGpserviceStop(tc.cliParams...)
 			if err == nil {
 				t.Errorf("\nExpected error Got: %#v", err)
 			}
@@ -193,7 +193,7 @@ func TestStopFailsWithoutCertificates(t *testing.T) {
 					t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
 				}
 			}
-			_, _ = testutils.RunStop()
+			_, _ = testutils.RunGpserviceStop()
 		})
 	}
 }
@@ -246,9 +246,9 @@ func TestStopFailsWithInvalidOptions(t *testing.T) {
 	for _, tc := range TestCases {
 		t.Run(tc.name, func(t *testing.T) {
 			testutils.InitService(*hostfile, testutils.CertificateParams)
-			_, _ = testutils.RunStart()
+			_, _ = testutils.RunGpserviceStart()
 
-			result, err := testutils.RunStop(tc.cliParams...)
+			result, err := testutils.RunGpserviceStop(tc.cliParams...)
 			if err == nil {
 				t.Errorf("\nExpected error Got: %#v", err)
 			}
@@ -260,7 +260,7 @@ func TestStopFailsWithInvalidOptions(t *testing.T) {
 					t.Errorf("\nExpected string: %#v \nNot found in: %#v", item, result.OutputMsg)
 				}
 			}
-			_, _ = testutils.RunStop()
+			_, _ = testutils.RunGpserviceStop()
 		})
 	}
 }
