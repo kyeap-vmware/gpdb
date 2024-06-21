@@ -266,13 +266,16 @@ begin
 end; /* in func */
 $$ language plpgsql;
 
+/* check at most 'iterations' times in 1 second interval */
 CREATE OR REPLACE FUNCTION is_query_waiting_for_syncrep(iterations int, check_query text) RETURNS bool AS $$
+    import time
     for i in range(iterations):
         results = plpy.execute("SELECT gp_execution_segment() AS content, query, wait_event\
                                 FROM gp_dist_random('pg_stat_activity')\
                                 WHERE gp_execution_segment() = 1 AND\
                                 query = '%s' AND\
                                 wait_event = 'SyncRep'" % check_query )
+        time.sleep(1)
         if results:
             return True
     return False
