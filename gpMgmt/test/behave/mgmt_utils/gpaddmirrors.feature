@@ -191,6 +191,8 @@ Feature: Tests for gpaddmirrors
         And edit the input file to add mirror with content 0,1,2 to a new non-empty directory with mode 0700
         When the user runs gpaddmirrors with input file and additional args "-a"
         Then gpaddmirrors should print "Segment directory '/tmp/.*' exists but is not empty!" to stdout
+        Then gpaddmirrors should return a return code of 2
+        And user can start transactions
         And all the segments are running
         And check segment conf: postgresql.conf
         And all files in gpAdminLogs directory are deleted
@@ -201,7 +203,9 @@ Feature: Tests for gpaddmirrors
         And a gaddmirrors directory under '/tmp' with mode '0700' is created
         When gpaddmirrors adds mirror with port offset "500"
         Then gpaddmirrors should return a return code of 0
+        And user can start transactions
         And all the segments are running
+        And the segments are synchronized
         And mirror port should have offset of 500 from primary
         And check segment conf: postgresql.conf
         And all files in gpAdminLogs directory are deleted
