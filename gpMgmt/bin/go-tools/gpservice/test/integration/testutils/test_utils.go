@@ -33,7 +33,7 @@ type CmdResult struct {
 const ExitCode1 = 1
 
 func ConfigureAndStartServices(hostfile string) error {
-	result, err := RunConfigure(true, "--hostfile", hostfile)
+	result, err := RunGPServiceInit(true, "--hostfile", hostfile)
 	if err != nil {
 		return fmt.Errorf("failed to configure the services: %v, %v", result.OutputMsg, err)
 	}
@@ -60,7 +60,7 @@ func ConfigureAndStartServices(hostfile string) error {
 	}
 }
 
-func RunConfigure(useCert bool, params ...string) (CmdResult, error) {
+func RunGPServiceInit(useCert bool, params ...string) (CmdResult, error) {
 	var args []string
 
 	if useCert {
@@ -359,7 +359,7 @@ func GetSvcFiles(svcDir string, svcExtention string) []string {
 }
 
 func InitService(hostfile string, params []string) {
-	_, _ = RunConfigure(false, append(
+	_, _ = RunGPServiceInit(false, append(
 		[]string{
 			"--hostfile", hostfile,
 		},

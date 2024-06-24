@@ -51,7 +51,7 @@ func TestDeleteSuccess(t *testing.T) {
 
 	})
 	t.Run("delete services after gp configure with --service-name param", func(t *testing.T) {
-		_, _ = testutils.RunConfigure(true, []string{
+		_, _ = testutils.RunGPServiceInit(true, []string{
 			"--hostfile", *hostfile,
 			"--service-name", "dummySvc",
 		}...)

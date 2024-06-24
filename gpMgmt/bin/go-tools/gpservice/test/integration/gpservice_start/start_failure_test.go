@@ -203,7 +203,7 @@ func TestStartInvalidCertificatePathFailures(t *testing.T) {
 			"--ca-certificate", "/invalid/path/to/ca-cert.pem",
 		}
 
-		result, err := testutils.RunConfigure(false, cliParams...)
+		result, err := testutils.RunGPServiceInit(false, cliParams...)
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}

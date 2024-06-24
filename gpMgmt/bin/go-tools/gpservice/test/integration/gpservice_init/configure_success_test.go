@@ -32,7 +32,7 @@ func TestConfigureHelp(t *testing.T) {
 	for _, tc := range Testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Running the gp configure command with help options
-			result, err := testutils.RunConfigure(false, tc.cliParams...)
+			result, err := testutils.RunGPServiceInit(false, tc.cliParams...)
 			// check for command result
 			if err != nil {
 				t.Errorf("\nUnexpected error: %#v", err)
@@ -192,7 +192,7 @@ func TestConfigureSuccess(t *testing.T) {
 			"--hostfile", *hostfile,
 			"--no-tls",
 		}
-		result, err := testutils.RunConfigure(false, cliParams...)
+		result, err := testutils.RunGPServiceInit(false, cliParams...)
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
@@ -219,7 +219,7 @@ func TestConfigureSuccess(t *testing.T) {
 
 func runConfigureAndCheckOutput(t *testing.T, input []string) {
 	// Running the gp configure command with input params
-	result, err := testutils.RunConfigure(true, input...)
+	result, err := testutils.RunGPServiceInit(true, input...)
 	// check for command result
 	if err != nil {
 		t.Errorf("\nUnexpected error: %#v", err)

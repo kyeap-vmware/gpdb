@@ -57,7 +57,7 @@ func TestStartSuccess(t *testing.T) {
 
 	//need to check if this is expected message, message coming as "[INFO]:-Hub started successfully"
 	t.Run("start hub after gpservice configure with --service-name param", func(t *testing.T) {
-		_, _ = testutils.RunConfigure(true, []string{
+		_, _ = testutils.RunGPServiceInit(true, []string{
 			"--hostfile", *hostfile,
 			"--service-name", "dummySvc",
 		}...)

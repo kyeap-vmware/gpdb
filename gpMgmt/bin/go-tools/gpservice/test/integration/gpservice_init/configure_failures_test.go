@@ -177,7 +177,7 @@ func TestConfigureFailure(t *testing.T) {
 
 	for _, tc := range ConfigureFailTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := testutils.RunConfigure(true, tc.cliParams...)
+			result, err := testutils.RunGPServiceInit(true, tc.cliParams...)
 			if err == nil {
 				t.Errorf("\nExpected error Got: %#v", err)
 			}
@@ -245,7 +245,7 @@ func TestConfigureCertificateFailure(t *testing.T) {
 	}
 	for _, tc := range ConfigureFailTestCases {
 		t.Run(tc.name, func(t *testing.T) {
-			result, err := testutils.RunConfigure(false, tc.cliParams...)
+			result, err := testutils.RunGPServiceInit(false, tc.cliParams...)
 			if err == nil {
 				t.Errorf("\nExpected error Got: %#v", err)
 			}
@@ -277,7 +277,7 @@ func TestConfigureInvalidCertificateFailure(t *testing.T) {
 		expectedOut := []string{
 			"Please make sure file exists before starting services",
 		}
-		result, err := testutils.RunConfigure(false, cliParams...)
+		result, err := testutils.RunGPServiceInit(false, cliParams...)
 		if err != nil {
 			t.Errorf("\nUnexpected error: %#v", err)
 		}
