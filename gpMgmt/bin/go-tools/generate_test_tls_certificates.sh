@@ -9,6 +9,7 @@ openssl req -x509 -sha256 -newkey rsa:4096 -days 365 -nodes \
     -keyout ./certificates/ca-key.pem \
     -out ./certificates/ca-cert.pem \
     -subj "/C=US/ST=California/L=Palo Alto/O=Greenplum/OU=GPDB/CN=$1" \
+    -addext "basicConstraints=CA:TRUE"
 
 # Generate private key and certificate signing request for the server
 openssl req -newkey rsa:4096 -nodes \
