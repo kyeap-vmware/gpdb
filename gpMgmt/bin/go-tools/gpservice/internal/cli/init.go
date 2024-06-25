@@ -72,6 +72,60 @@ func InitCmd() *cobra.Command {
 	return initCmd
 }
 
+func InitGpService(configFilepath string, hubPort, agentPort int, hostnames []string, hubLogDir, serviceName,
+	gpHome, caCertPath, serverCertPath, serverKeyPath string, noTlsFlag, defaultConfig bool) error {
+
+	credentials := &utils.GpCredentials{}
+
+	if !noTlsFlag {
+		credentials = &utils.GpCredentials{
+			CACertPath:     caCertPath,
+			ServerCertPath: serverCertPath,
+			ServerKeyPath:  serverKeyPath,
+			TlsEnabled:     true,
+		}
+		if _, err := os.Stat(caCertPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("ca-certificate file %s does not exists. Please make sure file exists before starting services", caCertPath)
+		}
+		if _, err := os.Stat(serverCertPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("server-certificate file %s does not exists. Please make sure file exists before starting services", serverCertPath)
+		}
+		if _, err := os.Stat(serverKeyPath); errors.Is(err, os.ErrNotExist) {
+			gplog.Warn("server-key file %s does not exists. Please make sure file exists before starting services", serverKeyPath)
+		}
+	} else {
+		credentials.TlsEnabled = false
+	}
+	err := config.Create(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials, false)
+	if err != nil {
+		return err
+	}
+
+	err = platform.CreateServiceDir(hostnames, gpHome)
+	if err != nil {
+		return err
+	}
+
+	err = platform.CreateAndInstallHubServiceFile(gpHome, serviceName, configFilepath)
+	if err != nil {
+		return err
+	}
+
+	err = platform.CreateAndInstallAgentServiceFile(hostnames, gpHome, serviceName, configFilepath)
+	if err != nil {
+		return err
+	}
+
+	err = platform.EnableUserLingering(hostnames, gpHome)
+	if err != nil {
+		return err
+	}
+
+	CheckOpenFilesLimitOnHosts(hostnames)
+
+	return err
+}
+
 func RunConfigure(cmd *cobra.Command) error {
 	if gpHome == "" {
 		return fmt.Errorf("not a valid gpHome found\n")
@@ -118,53 +172,9 @@ func RunConfigure(cmd *cobra.Command) error {
 	if len(hostnames) < 1 {
 		return fmt.Errorf("no host name found, please provide a valid input host name using either --host or --hostfile")
 	}
-	credentials := &utils.GpCredentials{}
 
-	if !noTlsFlag {
-		credentials = &utils.GpCredentials{
-			CACertPath:     caCertPath,
-			ServerCertPath: serverCertPath,
-			ServerKeyPath:  serverKeyPath,
-			TlsEnabled:     true,
-		}
-		if _, err := os.Stat(caCertPath); errors.Is(err, os.ErrNotExist) {
-			gplog.Warn("ca-certificate file %s does not exists. Please make sure file exists before starting services", caCertPath)
-		}
-		if _, err := os.Stat(serverCertPath); errors.Is(err, os.ErrNotExist) {
-			gplog.Warn("server-certificate file %s does not exists. Please make sure file exists before starting services", serverCertPath)
-		}
-		if _, err := os.Stat(serverKeyPath); errors.Is(err, os.ErrNotExist) {
-			gplog.Warn("server-key file %s does not exists. Please make sure file exists before starting services", serverKeyPath)
-		}
-	} else {
-		credentials.TlsEnabled = false
-	}
-	err = config.Create(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName, gpHome, credentials, false)
-	if err != nil {
-		return err
-	}
-
-	err = platform.CreateServiceDir(hostnames, gpHome)
-	if err != nil {
-		return err
-	}
-
-	err = platform.CreateAndInstallHubServiceFile(gpHome, serviceName, configFilepath)
-	if err != nil {
-		return err
-	}
-
-	err = platform.CreateAndInstallAgentServiceFile(hostnames, gpHome, serviceName, configFilepath)
-	if err != nil {
-		return err
-	}
-
-	err = platform.EnableUserLingering(hostnames, gpHome)
-	if err != nil {
-		return err
-	}
-
-	CheckOpenFilesLimitOnHosts(hostnames)
+	err = InitGpService(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName,
+		gpHome, caCertPath, serverCertPath, serverKeyPath, noTlsFlag, false)
 
 	return nil
 }

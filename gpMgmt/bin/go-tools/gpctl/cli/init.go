@@ -3,11 +3,16 @@ package cli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/greenplum"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -17,6 +22,7 @@ import (
 	"github.com/greenplum-db/gpdb/gpservice/constants"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_mgmt"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
 )
 
@@ -98,6 +104,9 @@ func initCmd() *cobra.Command {
 
 // RunInitClusterCmd driving function gets called from cobra on gpctl init command
 func RunInitClusterCmd(cmd *cobra.Command, args []string) error {
+
+	clusterCleanupFile := filepath.Join(greenplum.GetDefaultHubLogDir(), constants.CleanFileName)
+	// cli validation
 	if cliCleanFlag {
 		if len(args) == 1 {
 			return fmt.Errorf("cannot provide config file with --clean")
@@ -106,15 +115,67 @@ func RunInitClusterCmd(cmd *cobra.Command, args []string) error {
 		if cliCleanFlag && cliForceFlag {
 			return fmt.Errorf("cannot use --clean and --force together")
 		}
+
+		_, err := utils.System.Stat(clusterCleanupFile)
+		if err != nil {
+			return fmt.Errorf("cluster is clean, no cleanup file present")
+		}
+
+	} else {
+		if len(args) == 0 {
+			return fmt.Errorf("please provide config file for cluster initialization")
+		}
+
+		if len(args) > 1 {
+			return fmt.Errorf("more arguments than expected")
+		}
+	}
+
+	defer stopAndDeleteService(!IsGpserviceRunning, !IsConfigured)
+	var hostnames []string
+	var err error
+
+	if !IsConfigured {
+		if cliCleanFlag {
+			hostnames, err = GetHostListFromCleanUpFile(clusterCleanupFile)
+			if len(hostnames) == 0 || err != nil {
+				return fmt.Errorf("failed to get hostnames from cleanup file : %s, err: %s", clusterCleanupFile, err)
+			}
+		} else {
+			hostlist, err := GetHostlistFromConfig(args[0])
+			if err != nil {
+				return fmt.Errorf("failed to get hostlist from cluster config file : %s, err: %s", args[0], err)
+			}
+			// get unique hostnames from host list
+			hostnames, err = GetHostnamesFromHosts(hostlist)
+			if len(hostnames) == 0 || err != nil {
+				return fmt.Errorf("failed to get hostnames: %s, err: %s", args[0], err)
+			}
+		}
+
+		err = gpservice_mgmt.InitialiseGpService(ConfigFilePath, constants.DefaultHubPort, constants.DefaultAgentPort,
+			hostnames, greenplum.GetDefaultHubLogDir(), constants.DefaultServiceName,
+			os.Getenv("GPHOME"), "", "", "", true, true)
+
+		if err != nil {
+			return err
+		}
+
+		Conf, err = gpservice_config.Read(ConfigFilePath)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !IsConfigured || !IsGpserviceRunning {
+		err = gpservice_mgmt.StartServices(Conf)
+		if err != nil {
+			return err
+		}
+	}
+
+	if cliCleanFlag {
 		return InitClean(false)
-	}
-
-	if len(args) == 0 {
-		return fmt.Errorf("please provide config file for cluster initialization")
-	}
-
-	if len(args) > 1 {
-		return fmt.Errorf("more arguments than expected")
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -134,12 +195,46 @@ func RunInitClusterCmd(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
-	err := InitClusterService(args[0], ctx, ctrl, cliForceFlag, verbose)
+	err = InitClusterService(args[0], ctx, ctrl, cliForceFlag, verbose)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func IsGPServiceIsRunning(Conf *gpservice_config.Config) bool {
+	client, err := gpservice_config.ConnectToHub(Conf)
+	if err != nil {
+		return false
+	} else {
+		_, err = client.ReportAgentHealth(context.Background(), &idl.ReportAgentHealthRequest{})
+		if err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+func stopAndDeleteService(toStop, toDelete bool) {
+	//check if service is configured avoid in between exit
+	if Conf == nil {
+		gplog.Warn("gpservice not yet configured, nothing to be done.")
+		return
+	}
+	if toDelete {
+		err := gpservice_mgmt.DeleteServices(Conf, ConfigFilePath)
+		if err != nil {
+			gplog.Error("failed to stop and delete services: %v", err)
+			return
+		}
+	} else if toStop {
+		err := gpservice_mgmt.StopServices(Conf)
+		if err != nil {
+			gplog.Error("failed to stop services: %v", err)
+			return
+		}
+	}
 }
 
 func InitClean(prompt bool) error {
@@ -972,4 +1067,150 @@ func CheckAndSetDefaultConfigParams(clusterParams *idl.ClusterParams, configPara
 		gplog.Info("Segment %v not set, will set to value %v from CommonConfig", configParam, clusterParams.CommonConfig[configParam])
 		clusterParams.SegmentConfig[configParam] = clusterParams.CommonConfig[configParam]
 	}
+}
+
+/*
+CheckGpServiceIsConfigured check if gpservice.conf file exists on the ConfigFilePath
+if file exists validate that it has some content
+return true if file exists and has some content else false
+*/
+func CheckGpServiceIsConfigured() bool {
+	fileInfo, err := os.Stat(ConfigFilePath)
+	if os.IsNotExist(err) {
+		return false
+	} else if err != nil {
+		return false
+	}
+
+	// Check if the file is not empty
+	if fileInfo.Size() == 0 {
+		os.Remove(ConfigFilePath)
+		return false
+	}
+
+	return true
+}
+
+// getHostnameUsingSSH executes the SSH command to run `hostname` on the remote host
+func getHostnameUsingSSH(host string, wg *sync.WaitGroup, results chan<- string, errors chan<- error) {
+	defer wg.Done()
+
+	// Construct the SSH command
+	cmd := exec.Command("ssh", host, "hostname")
+
+	// Capture the output
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		errors <- fmt.Errorf("failed to run command on host %s: %v, stderr: %s", host, err, stderr.String())
+		return
+	}
+
+	hostname := strings.TrimSpace(stdout.String())
+	results <- hostname
+}
+
+// GetHostnamesFromHosts takes a list of hosts, performs SSH to them in parallel, and runs the hostname command
+// returns list of hostname
+func GetHostnamesFromHosts(hosts []string) ([]string, error) {
+	var wg sync.WaitGroup
+	results := make(chan string, len(hosts))
+	errs := make(chan error, len(hosts))
+
+	for _, host := range hosts {
+		wg.Add(1)
+		go getHostnameUsingSSH(host, &wg, results, errs)
+	}
+
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	var hostnames []string
+	for result := range results {
+		hostnames = append(hostnames, result)
+	}
+
+	var err error
+	for e := range errs {
+		err = errors.Join(err, e)
+	}
+
+	return hostnames, err
+}
+
+func GetHostListFromCleanUpFile(clusterCleanupFile string) ([]string, error) {
+
+	_, err := utils.System.Stat(clusterCleanupFile)
+	if err != nil {
+		return nil, fmt.Errorf("cluster is clean, no cleanup file present")
+	}
+	entries, err := utils.ReadEntriesFromFile(clusterCleanupFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed reading entries from cleanup file")
+	}
+	hostnameMap := make(map[string]struct{})
+
+	for _, entry := range entries {
+		fields := strings.Fields(entry)
+		if len(fields) == 2 {
+			host := fields[0]
+			hostnameMap[host] = struct{}{}
+		} else {
+			return nil, fmt.Errorf("invalid entries in map")
+		}
+	}
+
+	uniqueHostnames := make([]string, 0, len(hostnameMap))
+	for hostname := range hostnameMap {
+		uniqueHostnames = append(uniqueHostnames, hostname)
+	}
+	return uniqueHostnames, nil
+}
+
+/*
+GetHostlistFromConfig parse content of the hostlist from the config file and return
+*/
+func GetHostlistFromConfig(filePath string) ([]string, error) {
+
+	v := viper.New()
+	v.SetConfigFile(filePath)
+
+	if err := v.ReadInConfig(); err != nil {
+		return nil, fmt.Errorf("error reading config file: %w", err)
+	}
+
+	var config InitConfig
+	if err := v.UnmarshalExact(&config); err != nil {
+		return nil, fmt.Errorf("failed to parse config file:%v error: %v", filePath, err)
+	}
+	hostnameMap := make(map[string]struct{})
+
+	// Add hostnames from hostlist
+	for _, hostname := range config.HostList {
+		hostnameMap[hostname] = struct{}{}
+	}
+
+	// Add coordinator hostname
+	if config.Coordinator.Hostname != "" {
+		hostnameMap[config.Coordinator.Hostname] = struct{}{}
+	}
+
+	// Add hostnames from segment-array
+	for _, segment := range config.SegmentArray {
+		if segment.Primary.Hostname != "" {
+			hostnameMap[segment.Primary.Hostname] = struct{}{}
+		}
+		if segment.Mirror.Hostname != "" {
+			hostnameMap[segment.Mirror.Hostname] = struct{}{}
+		}
+	}
+
+	uniqueHostnames := make([]string, 0, len(hostnameMap))
+	for hostname := range hostnameMap {
+		uniqueHostnames = append(uniqueHostnames, hostname)
+	}
+	return uniqueHostnames, nil
 }

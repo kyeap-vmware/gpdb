@@ -12,13 +12,13 @@ func DeleteCmd() *cobra.Command {
 		Use:   "delete",
 		Short: "de-register services and cleanup related files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return DeleteServices(conf)
+			return DeleteServices(conf, configFilepath)
 		},
 	}
 	return deleteCmd
 }
 
-func DeleteServices(conf *gpservice_config.Config) error {
+func DeleteServices(conf *gpservice_config.Config, confFile string) error {
 	// stop services if running, else ignore the error
 	err := StopServices(conf)
 	if err != nil {
@@ -48,7 +48,7 @@ func DeleteServices(conf *gpservice_config.Config) error {
 	}
 
 	// remove gpservice.conf from hub and agents using ssh
-	err = conf.Remove(configFilepath)
+	err = conf.Remove(confFile)
 	if err != nil {
 		return err
 	}

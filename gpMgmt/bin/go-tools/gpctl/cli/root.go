@@ -12,9 +12,11 @@ import (
 )
 
 var (
-	configFilepath string
-	verbose        bool
-	Conf           *gpservice_config.Config
+	ConfigFilePath     string
+	verbose            bool
+	IsConfigured       bool
+	IsGpserviceRunning bool
+	Conf               *gpservice_config.Config
 )
 
 func RootCommand() *cobra.Command {
@@ -22,16 +24,24 @@ func RootCommand() *cobra.Command {
 		Use:  "gpctl",
 		Long: "gpctl is a utility to manage a Greenplum Database System",
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			Conf, err = gpservice_config.Read(configFilepath)
+			IsConfigured = CheckGpServiceIsConfigured()
+			if !IsConfigured {
+				initializeLogger(cmd, "~/gpAdminLogs")
+				IsGpserviceRunning = false
+				return
+			}
+
+			Conf, err = gpservice_config.Read(ConfigFilePath)
 			if err != nil {
 				return err
 			}
-
+			IsGpserviceRunning = IsGPServiceIsRunning(Conf)
 			initializeLogger(cmd, Conf.LogDir)
+
 			return
 		}}
 
-	root.PersistentFlags().StringVar(&configFilepath, "service-config-file", filepath.Join(os.Getenv("GPHOME"), constants.ConfigFileName), `Path to gpservice configuration file`)
+	root.PersistentFlags().StringVar(&ConfigFilePath, "service-config-file", filepath.Join(os.Getenv("GPHOME"), constants.ConfigFileName), `Path to gpservice configuration file`)
 	root.PersistentFlags().BoolVar(&verbose, "verbose", false, `Provide verbose output`)
 
 	root.CompletionOptions.DisableDefaultCmd = true

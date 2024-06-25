@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path/filepath"
+
 	"reflect"
 	"strings"
 	"testing"
@@ -2099,4 +2102,151 @@ func TestInitClean(t *testing.T) {
 			t.Fatalf("got %#v, want %#v", err, expectedErr)
 		}
 	})
+}
+
+func TestCheckGpServiceIsConfigured(t *testing.T) {
+	setupTest(t)
+	defer teardownTest()
+
+	t.Run("File does not exist", func(t *testing.T) {
+		cli.ConfigFilePath = "gpservice.conf"
+		if cli.CheckGpServiceIsConfigured() {
+			t.Errorf("Expected false, got true")
+		}
+	})
+
+	t.Run("File is empty", func(t *testing.T) {
+		tmpFile, err := ioutil.TempFile("", "gpservice.conf")
+		if err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+		cli.ConfigFilePath = tmpFile.Name()
+		if cli.CheckGpServiceIsConfigured() {
+			t.Errorf("Expected false, got true")
+		}
+
+		if _, err := os.Stat(cli.ConfigFilePath); !os.IsNotExist(err) {
+			t.Errorf("Expected file to be removed, but it exists")
+		}
+	})
+
+	t.Run("File is present and not empty", func(t *testing.T) {
+		tmpFile, err := ioutil.TempFile("", "nonemptyfile.conf")
+		if err != nil {
+			t.Fatalf("Failed to create temp file: %v", err)
+		}
+		defer os.Remove(tmpFile.Name())
+
+		_, err = tmpFile.WriteString("test content")
+		if err != nil {
+			t.Fatalf("Failed to write to temp file: %v", err)
+		}
+		tmpFile.Close()
+		cli.ConfigFilePath = tmpFile.Name()
+
+		if !cli.CheckGpServiceIsConfigured() {
+			t.Errorf("Expected true, got false")
+		}
+	})
+}
+
+func TestGetHostlistFromConfig(t *testing.T) {
+	t.Run("Config file not found", func(t *testing.T) {
+		_, err := cli.GetHostlistFromConfig("nonexistentpath/config.json")
+		if err == nil {
+			t.Fatalf("Expected file not found error, got nil")
+		}
+		if !strings.Contains(err.Error(), "error reading config file") {
+			t.Fatalf("Expected file not found error, got: %v", err)
+		}
+	})
+
+	t.Run("Hostlist not found in config", func(t *testing.T) {
+		content := `{"somekey": "somevalue"}`
+		filePath := createTempFile(t, content, "config.json")
+		defer os.Remove(filePath)
+
+		_, err := cli.GetHostlistFromConfig(filePath)
+		if !strings.Contains(err.Error(), "failed to parse config file") {
+			t.Fatalf("Expected hostlist not found error, got: %v", err)
+		}
+	})
+
+	t.Run("Hostlist found in json config", func(t *testing.T) {
+		content := `{"hostlist": ["host1.example.com", "host2.example.com"]}`
+		filePath := createTempFile(t, content, "config.json")
+		defer os.Remove(filePath)
+
+		hostlist, err := cli.GetHostlistFromConfig(filePath)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		expected := []string{"host1.example.com", "host2.example.com"}
+		if !reflect.DeepEqual(hostlist, expected) {
+			t.Errorf("Expected %v, got %v", expected, hostlist)
+		}
+	})
+
+	t.Run("Hostlist found in yaml config", func(t *testing.T) {
+		content := `---
+hostlist:
+- host1.example.com
+- host2.example.com
+`
+		filePath := createTempFile(t, content, "config.yaml")
+		defer os.Remove(filePath)
+
+		hostlist, err := cli.GetHostlistFromConfig(filePath)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		expected := []string{"host1.example.com", "host2.example.com"}
+		if !reflect.DeepEqual(hostlist, expected) {
+			t.Errorf("Expected %v, got %v", expected, hostlist)
+		}
+	})
+
+	t.Run("Hostlist found in toml config", func(t *testing.T) {
+		content := `hostlist = [ "host1.example.com", "host2.example.com" ]`
+		filePath := createTempFile(t, content, "config.toml")
+		defer os.Remove(filePath)
+
+		hostlist, err := cli.GetHostlistFromConfig(filePath)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+
+		expected := []string{"host1.example.com", "host2.example.com"}
+		if !reflect.DeepEqual(hostlist, expected) {
+			t.Errorf("Expected %v, got %v", expected, hostlist)
+		}
+	})
+
+	t.Run("Invalid config file format", func(t *testing.T) {
+		content := `invalid_json_content`
+		filePath := createTempFile(t, content, "config.json")
+		defer os.Remove(filePath)
+
+		_, err := cli.GetHostlistFromConfig(filePath)
+		if err == nil {
+			t.Fatalf("Expected error, got nil")
+		}
+	})
+}
+
+// Helper function to create a temporary file with given content
+func createTempFile(t *testing.T, content string, filename string) string {
+	t.Helper()
+	tmpDir := os.TempDir()
+	filePath := filepath.Join(tmpDir, filename)
+
+	err := ioutil.WriteFile(filePath, []byte(content), 0644)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+
+	return filePath
 }
