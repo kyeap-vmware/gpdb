@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spf13/cobra"
+	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/idl"
@@ -29,6 +31,9 @@ func TestStartCmd(t *testing.T) {
 			return "cdw", nil
 		}
 		defer utils.ResetSystemFunctions()
+
+		utils.SetNewHealthClient(testutils.NewMockHealthClient(grpc_health_v1.HealthCheckResponse_SERVING, nil))
+		defer utils.ResetNewHealthClient()
 
 		_, err := testutils.ExecuteCobraCommand(t, cli.StartCmd(), "--hub")
 		if err != nil {
@@ -75,6 +80,9 @@ func TestStartCmd(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
 
+		utils.SetNewHealthClient(testutils.NewMockHealthClient(grpc_health_v1.HealthCheckResponse_SERVING, nil))
+		defer utils.ResetNewHealthClient()
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 
@@ -97,7 +105,7 @@ func TestStartCmd(t *testing.T) {
 	})
 
 	t.Run("returns error when fails to start the hub service", func(t *testing.T) {
-		_, _, logfile:= testhelper.SetupTestLogger()
+		_, _, logfile := testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
@@ -106,14 +114,14 @@ func TestStartCmd(t *testing.T) {
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.StartCmd())
+		testutils.ExecuteCobraCommand(t, cli.StartCmd()) // nolint
 
 		expected := `\[ERROR\]:-failed to start hub service:`
 		testutils.AssertLogMessage(t, logfile, expected)
 	})
 
 	t.Run("returns error when fails to start the agent service", func(t *testing.T) {
-		_, _, logfile:= testhelper.SetupTestLogger()
+		_, _, logfile := testhelper.SetupTestLogger()
 
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
@@ -121,6 +129,9 @@ func TestStartCmd(t *testing.T) {
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
+
+		utils.SetNewHealthClient(testutils.NewMockHealthClient(grpc_health_v1.HealthCheckResponse_SERVING, nil))
+		defer utils.ResetNewHealthClient()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -135,7 +146,7 @@ func TestStartCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConfigFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.StartCmd())
+		testutils.ExecuteCobraCommand(t, cli.StartCmd()) // nolint
 
 		expected := fmt.Sprintf(`\[ERROR\]:-failed to start agent service: %v`, expectedErr)
 		testutils.AssertLogMessage(t, logfile, expected)
@@ -152,6 +163,9 @@ func TestStartCmd(t *testing.T) {
 			return "cdw", nil
 		}
 		defer utils.ResetSystemFunctions()
+
+		utils.SetNewHealthClient(testutils.NewMockHealthClient(grpc_health_v1.HealthCheckResponse_SERVING, nil))
+		defer utils.ResetNewHealthClient()
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
@@ -176,7 +190,9 @@ func TestStartCmd(t *testing.T) {
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		_, err := testutils.ExecuteCobraCommand(t, cli.RootCommand(), "start", "--verbose")
+		rootCmd := cli.RootCommand()
+		rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {}
+		_, err := testutils.ExecuteCobraCommand(t, rootCmd, "start", "--verbose")
 		writer.Close()
 		stdout := <-buffer
 

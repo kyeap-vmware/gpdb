@@ -1,22 +1,18 @@
 package cli_test
 
 import (
-	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/internal/agent"
-	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
-	"reflect"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/constants"
+	"github.com/greenplum-db/gpdb/gpservice/internal/agent"
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 )
 
 func init() {
@@ -102,55 +98,6 @@ func TestInitCmd(t *testing.T) {
 		testutils.AssertLogMessage(t, logfile, `\[INFO\]:-Wrote agent service file to .* on segment hosts`)
 
 	})
-	type test struct {
-		flags         []string
-		expectedError string
-		noTls         bool
-	}
-	flagTests := []test{
-		{flags: []string{"--ca-certificate"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
-		{flags: []string{"--server-certificate"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
-		{flags: []string{"--server-key"}, expectedError: "cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates", noTls: true},
-		{flags: []string{"--ca-certificate", "--server-key"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
-		{flags: []string{"--server-certificate", "--server-key"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
-		{flags: []string{"--server-certificate", "--ca-certificate"}, expectedError: "one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags", noTls: false},
-	}
-	for _, tc := range flagTests {
-		t.Run(fmt.Sprintf("Returns error when %s flag used with --no-tls flag", tc.flags), func(t *testing.T) {
-
-			resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
-			defer resetConf()
-
-			platform := &testutils.MockPlatform{}
-			agent.SetPlatform(platform)
-			defer agent.ResetPlatform()
-
-			utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
-			utils.System.OpenFile = func(name string, flag int, perm os.FileMode) (*os.File, error) {
-				_, writer, _ := os.Pipe()
-
-				return writer, nil
-			}
-			defer utils.ResetSystemFunctions()
-
-			gpservice_config.SetCopyConfigFileToAgents()
-			defer gpservice_config.ResetConfigFunctions()
-
-			var args []string
-			if tc.noTls {
-				args = []string{"--no-tls"}
-			}
-			for _, flag := range tc.flags {
-				args = append(args, flag, "tmp")
-			}
-
-			_, err := testutils.ExecuteCobraCommand(t, cli.InitCmd(), args...)
-
-			if !strings.Contains(err.Error(), tc.expectedError) {
-				t.Fatalf("got %q, want %q", err, tc.expectedError)
-			}
-		})
-	}
 }
 
 func TestGetUlimitSshFn(t *testing.T) {
@@ -247,49 +194,5 @@ func TestCheckOpenFilesLimitOnHosts(t *testing.T) {
 		}
 		cli.CheckOpenFilesLimitOnHosts([]string{"localhost"})
 		testutils.AssertLogMessage(t, logile, testStr)
-	})
-}
-func TestGetHostnames(t *testing.T) {
-	testhelper.SetupTestLogger()
-
-	t.Run("is able to parse the hostnames correctly", func(t *testing.T) {
-		file, err := os.CreateTemp("", "test")
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-		defer os.Remove(file.Name())
-
-		_, err = file.WriteString("sdw1\nsdw2\nsdw3\n")
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-
-		result, err := cli.GetHostnames(file.Name())
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-
-		expected := []string{"sdw1", "sdw2", "sdw3"}
-		if !reflect.DeepEqual(result, expected) {
-			t.Fatalf("got %+v, want %+v", result, expected)
-		}
-	})
-
-	t.Run("errors out when not able to read from the file", func(t *testing.T) {
-		file, err := os.CreateTemp("", "test")
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-		defer os.Remove(file.Name())
-
-		err = os.Chmod(file.Name(), 0000)
-		if err != nil {
-			t.Fatalf("unexpected error: %#v", err)
-		}
-
-		_, err = cli.GetHostnames(file.Name())
-		if !errors.Is(err, os.ErrPermission) {
-			t.Fatalf("got %v, want %v", err, os.ErrPermission)
-		}
 	})
 }

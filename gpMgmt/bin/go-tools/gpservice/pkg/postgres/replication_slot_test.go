@@ -3,9 +3,10 @@ package postgres_test
 import (
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"strconv"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/greenplum-db/gp-common-go-libs/dbconn"

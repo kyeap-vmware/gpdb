@@ -22,7 +22,8 @@ func main() {
 			gplog.Error(err.Error())
 		} else {
 			fmt.Println(err)
-			err = root.Help(); if err != nil {
+			err = root.Help()
+			if err != nil {
 				fmt.Println(err.Error())
 			}
 		}

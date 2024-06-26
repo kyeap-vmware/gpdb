@@ -3,11 +3,12 @@ package agent_test
 import (
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/constants"

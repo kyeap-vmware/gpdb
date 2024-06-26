@@ -1,58 +1,44 @@
-all: build
-
+# Default target
 .DEFAULT_GOAL := all
-MODULE_NAME=gp
-SUBDIRS = gpservice gpctl
 
-
-
+# Environment settings
 LINUX_ENV := env GOOS=linux GOARCH=amd64
 MAC_ENV := env GOOS=darwin GOARCH=amd64
 
+# Directories
+DIRS := gpservice gpctl
 
-.PHONY: unit integration test
-TEST_PACKAGES := ./...
-unit: TEST_PACKAGES := $(shell go list ./... | grep -v ./test/integration)
+# Phony targets
+.PHONY: all unit integration test-coverage depend-dev lint build build_linux build_mac proto cert install format pipeline clean uninstall
+
+# Default target
+all: build
+
+# Unit tests
 unit:
-		$(MAKE) -C gpservice/ unit; $(MAKE) -C gpctl/ unit;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) unit;)
 
-
-
-# You can override this from the command line to run tests for specific utility.
-# For example, to run start related tests: make integration UTILITY=start
-# NOTE: If hostfile is not provided, by default it will run tests on localhost.
-UTILITY = ''
-PACKAGE = ''
+# Integration tests
+integration: PACKAGE = ''
+integration: UTILITY = '""'
+integration:
 ifeq ($(PACKAGE), gpservice)
-integration:
-	$(MAKE) -C gpservice/ integration UTILITY=$(UTILITY) FILE=$(FILE)
+	@$(MAKE) -C gpservice integration UTILITY=$(UTILITY) FILE=$(FILE)
 else ifeq ($(PACKAGE), gpctl)
-integration:
-	$(MAKE) -C gpctl/ integration UTILITY=$(UTILITY) FILE=$(FILE)
+	@$(MAKE) -C gpctl integration UTILITY=$(UTILITY) FILE=$(FILE)
 else
-integration:
-	@echo "Please specify a valid PACKAGE value (gpservice or gpctl)."
+	@$(MAKE) -C gpservice integration UTILITY=$(UTILITY) FILE=$(FILE)
+	@$(MAKE) -C gpctl integration UTILITY=$(UTILITY) FILE=$(FILE)
 endif
 
-.PHONY: test-coverage
-PACKAGE_DIRS := $(shell go list ./... | grep -vE "gp$$|constants$$|testutils|idl$$|integration")
+# Test coverage
 test-coverage:
-	@for dir in $(PACKAGE_DIRS); do \
-		PACKAGE_NAME=$$(basename $$dir); \
-		COVERAGE_PERCENTAGE=$$(go test -cover $$dir | grep coverage | grep -oE '[0-9]+(\.[0-9]+)?%'); \
-		echo "$$dir: $$COVERAGE_PERCENTAGE"; \
-	done
-	@echo ""
-	@go test --count=1 -coverprofile=/tmp/coverage.out $(PACKAGE_DIRS) > /dev/null 2>&1; \
-	cat /tmp/coverage.out | \
-	awk 'BEGIN {cov=0; stat=0;} \
-	$$3!="" { cov+=($$3==1?$$2:0); stat+=$$2; } \
-    END {printf("Total: %.2f%%\n", (cov/stat)*100);}'
-	@echo "----------------------"
-	@echo "Show HTML report with:"
-	@echo "$ go tool cover -html /tmp/coverage.out"
+	@echo "Coverage for gpservice"
+	@$(MAKE) -C gpservice test-coverage
+	@echo "\n\nCoverage for gpctl"
+	@$(MAKE) -C gpctl test-coverage
 
-.PHONY: depend-dev
+# Dependencies for development
 depend-dev: export GOBIN := $(CURDIR)/dev-bin
 depend-dev: export GOFLAGS := -mod=readonly # do not update dependencies during installation
 depend-dev:
@@ -61,37 +47,37 @@ depend-dev:
 	go install github.com/golang/mock/mockgen@v1.6.0
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(GOBIN) v1.52.2
 
-.PHONY: lint
+# Linting
 lint:
-	$(MAKE) -C gpservice/ lint; $(MAKE) -C gpctl/ lint;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) lint;)
 
-BUILD_ENV = $($(OS)_ENV)
-
-.PHONY: build build_linux build_mac
+# Building
 build:
-	$(MAKE) -C gpservice/ build; $(MAKE) -C gpctl/ build;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) build;)
 
-build_linux: OS := LINUX
-build_mac: OS := MAC
-build_linux build_mac: build
+build_linux:
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) build_linux;)
 
+build_mac:
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) build_mac;)
+
+# Proto generation
 proto:
-	cd gpservice; $(MAKE) proto
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) proto;)
 
+# Certificate generation
 cert:
-	./generate_test_tls_certificates.sh `hostname`
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) cert;)
 
-BUILD_FLAGS = -gcflags="all=-N -l"
-
+# Installation
 install:
-	$(MAKE) -C gpservice/ install; $(MAKE) -C gpctl/ install;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) install;)
 
-# goimports supports a superset of the formatting rules gofmt supports, but
-# gofmt allows custom formatting rules so we include both for now
+# Formatting
 format:
-	$(MAKE) -C gpservice/ format; $(MAKE) -C gpctl/ format;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) format;)
 
-# You can override these from the command line.
+# Pipeline
 GIT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GIT_REMOTE ?= $(shell git ls-remote --get-url)
 PIPELINE_NAME ?= gpdb-dev-$(shell git rev-parse --abbrev-ref HEAD | tr '/' '-')
@@ -104,8 +90,10 @@ pipeline:
 		-v gpdb-git-branch=$(GIT_BRANCH) \
 		-v pipeline-name=$(PIPELINE_NAME)
 
+# Cleaning
 clean:
-	$(MAKE) -C gpservice/ clean; $(MAKE) -C gpctl/ clean;
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) clean;)
 
+# Uninstallation
 uninstall:
-	rm -rf $(GPHOME)/bin/gpctl; rm -rf $(GPHOME)/bin/gpservices
+	@$(foreach dir, $(DIRS), $(MAKE) -C $(dir) uninstall;)

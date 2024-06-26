@@ -40,7 +40,7 @@ func TestHubCmd(t *testing.T) {
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.HubCmd())
+		testutils.ExecuteCobraCommand(t, cli.HubCmd()) // nolint
 
 		expected := fmt.Sprintf(`\[ERROR\]:-could not listen on port %d:`, port)
 		testutils.AssertLogMessage(t, logfile, expected)

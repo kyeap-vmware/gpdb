@@ -108,7 +108,7 @@ func TestStopCmd(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		
+
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
@@ -125,7 +125,7 @@ func TestStopCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConfigFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.StopCmd())
+		testutils.ExecuteCobraCommand(t, cli.StopCmd()) // nolint
 
 		expected := fmt.Sprintf(`\[ERROR\]:-failed to stop hub service: %v`, expectedErr)
 		testutils.AssertLogMessage(t, logfile, expected)
@@ -139,7 +139,7 @@ func TestStopCmd(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		
+
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
@@ -156,7 +156,7 @@ func TestStopCmd(t *testing.T) {
 		gpservice_config.SetConnectToHub(client)
 		defer gpservice_config.ResetConfigFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.StopCmd())
+		testutils.ExecuteCobraCommand(t, cli.StopCmd()) // nolint
 
 		expected := fmt.Sprintf(`\[ERROR\]:-failed to stop agent service: %v`, expectedErr)
 		testutils.AssertLogMessage(t, logfile, expected)

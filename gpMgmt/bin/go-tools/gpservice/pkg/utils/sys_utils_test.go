@@ -3,13 +3,14 @@ package utils_test
 import (
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"

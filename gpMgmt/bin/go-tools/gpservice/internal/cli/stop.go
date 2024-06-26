@@ -47,11 +47,11 @@ $ gpservice stop --agent
 
 func runStopCmd(stopHub, stopAgent bool) error {
 	if stopHub {
-		return stopHubService(conf)
+		return stopHubService(serviceConfig)
 	} else if stopAgent {
-		return stopAgentService(conf)
+		return stopAgentService(serviceConfig)
 	} else {
-		return StopServices(conf)
+		return StopServices(serviceConfig)
 	}
 }
 

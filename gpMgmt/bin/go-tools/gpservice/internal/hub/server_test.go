@@ -3,8 +3,6 @@ package hub_test
 import (
 	"context"
 	"errors"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
-	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
 	"reflect"
 	"sort"
@@ -12,10 +10,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
+	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
+
 	"github.com/golang/mock/gomock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
@@ -92,6 +94,9 @@ func TestStartAgents(t *testing.T) {
 
 		utils.System.ExecCommand = exectest.NewCommand(exectest.Success)
 		defer utils.ResetSystemFunctions()
+
+		utils.SetNewHealthClient(testutils.NewMockHealthClient(grpc_health_v1.HealthCheckResponse_SERVING, nil))
+		defer utils.ResetNewHealthClient()
 
 		_, err := hubServer.StartAgents(context.Background(), &idl.StartAgentsRequest{})
 		if err != nil {

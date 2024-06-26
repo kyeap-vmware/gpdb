@@ -3,13 +3,14 @@ package agent_test
 import (
 	"context"
 	"errors"
-	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
 	"os/exec"
 	"os/user"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/idl"

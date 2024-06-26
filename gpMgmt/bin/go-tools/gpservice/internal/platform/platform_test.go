@@ -3,12 +3,13 @@ package platform_test
 import (
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 	"os"
 	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils/exectest"
 
 	"github.com/greenplum-db/gpdb/gpservice/constants"
 	"github.com/greenplum-db/gpdb/gpservice/internal/platform"
@@ -116,7 +117,7 @@ func TestGenerateServiceFileContents(t *testing.T) {
 	t.Run("GenerateServiceFileContents successfully generates contents for darwin", func(t *testing.T) {
 		platform := GetPlatform(t, constants.PlatformDarwin)
 
-		expected := `<?xml version="1.0" encoding="UTF-8"?>
+		expected := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -133,9 +134,14 @@ func TestGenerateServiceFileContents(t *testing.T) {
     <string>/tmp/grpc_hub.log</string>
     <key>StandardErrorPath</key>
     <string>/tmp/grpc_hub.log</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+	    <key>PATH</key>
+		<string>%s</string>
+	</dict>
 </dict>
 </plist>
-`
+`, os.Getenv("PATH"))
 		contents := platform.GenerateServiceFileContents("hub", "/test", "gpservice", "/path/to/service/file")
 		if contents != expected {
 			t.Fatalf("got %q, want %q", contents, expected)

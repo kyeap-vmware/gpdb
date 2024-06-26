@@ -2,12 +2,13 @@ package cli_test
 
 import (
 	"fmt"
-	"github.com/greenplum-db/gp-common-go-libs/testhelper"
-	"github.com/greenplum-db/gpdb/gpservice/internal/agent"
-	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gp-common-go-libs/testhelper"
+	"github.com/greenplum-db/gpdb/gpservice/internal/agent"
+	"github.com/greenplum-db/gpdb/gpservice/pkg/gpservice_config"
 
 	"github.com/greenplum-db/gpdb/gpservice/internal/cli"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"

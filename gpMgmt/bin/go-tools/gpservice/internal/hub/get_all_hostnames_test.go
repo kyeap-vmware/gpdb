@@ -3,13 +3,14 @@ package hub_test
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/golang/mock/gomock"
 	"github.com/greenplum-db/gpdb/gpservice/idl/mock_idl"
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"google.golang.org/grpc"
-	"reflect"
-	"strings"
-	"testing"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/idl"

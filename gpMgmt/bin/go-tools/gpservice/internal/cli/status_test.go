@@ -72,8 +72,8 @@ Agent     sdw1      running   123       5H
 	})
 
 	t.Run("errors out when not able to display the hub status", func(t *testing.T) {
-		_, _, logfile:= testhelper.SetupTestLogger()
-		
+		_, _, logfile := testhelper.SetupTestLogger()
+
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
@@ -87,7 +87,7 @@ Agent     sdw1      running   123       5H
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		testutils.ExecuteCobraCommand(t, cli.StatusCmd())
+		testutils.ExecuteCobraCommand(t, cli.StatusCmd()) // nolint
 		writer.Close()
 		stdout := <-buffer
 
@@ -101,8 +101,8 @@ Agent     sdw1      running   123       5H
 	})
 
 	t.Run("errors out when not able to display the agent status", func(t *testing.T) {
-		_, _, logfile:= testhelper.SetupTestLogger()
-		
+		_, _, logfile := testhelper.SetupTestLogger()
+
 		resetConf := cli.SetConf(testutils.CreateDummyServiceConfig(t))
 		defer resetConf()
 
@@ -128,7 +128,7 @@ Agent     sdw1      running   123       5H
 		buffer, writer, resetStdout := testutils.CaptureStdout(t)
 		defer resetStdout()
 
-		testutils.ExecuteCobraCommand(t, cli.StatusCmd())
+		testutils.ExecuteCobraCommand(t, cli.StatusCmd()) // nolint
 		writer.Close()
 		stdout := <-buffer
 

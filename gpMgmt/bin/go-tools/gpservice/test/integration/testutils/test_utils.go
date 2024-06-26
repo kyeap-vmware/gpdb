@@ -125,7 +125,7 @@ func RunInitCluster(params ...string) (CmdResult, error) {
 func DisableandDeleteHubServiceFile(p platform.Platform, serviceName string) {
 	serviceDir, serviceExt, serviceCmd := GetServiceDetails(p)
 	hubServiceFile := filepath.Join(serviceDir, fmt.Sprintf("%s.%s", serviceName, serviceExt))
-	fmt.Printf(hubServiceFile)
+	fmt.Print(hubServiceFile)
 	UnloadSvcFile(serviceCmd, hubServiceFile)
 	_ = os.RemoveAll(hubServiceFile)
 }
@@ -133,7 +133,7 @@ func DisableandDeleteHubServiceFile(p platform.Platform, serviceName string) {
 func DisableandDeleteAgentServiceFile(p platform.Platform, serviceName string) {
 	serviceDir, serviceExt, serviceCmd := GetServiceDetails(p)
 	agentServiceFile := filepath.Join(serviceDir, fmt.Sprintf("%s.%s", serviceName, serviceExt))
-	fmt.Printf(agentServiceFile)
+	fmt.Print(agentServiceFile)
 	UnloadSvcFile(serviceCmd, agentServiceFile)
 	_ = os.RemoveAll(agentServiceFile)
 }

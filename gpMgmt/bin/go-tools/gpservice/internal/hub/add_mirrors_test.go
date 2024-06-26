@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"io/fs"
 	"os"
 	"reflect"
 	"strconv"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/golang/mock/gomock"

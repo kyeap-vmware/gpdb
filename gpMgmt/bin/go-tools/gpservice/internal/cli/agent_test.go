@@ -20,7 +20,7 @@ func TestAgentCmd(t *testing.T) {
 		defer resetConf()
 
 		ctx, cancel := context.WithCancel(context.Background())
-		go testutils.ExecuteCobraCommandContext(t, ctx, cli.AgentCmd()) //nolint
+		go testutils.ExecuteCobraCommandContext(t, ctx, cli.AgentCmd()) // nolint
 
 		testutils.CheckGRPCServerRunning(t, config.AgentPort)
 		cancel()
@@ -28,7 +28,7 @@ func TestAgentCmd(t *testing.T) {
 
 	t.Run("returns error when fails to start the agent server", func(t *testing.T) {
 		_, _, logfile := testhelper.SetupTestLogger()
-		
+
 		port, cleanup := testutils.GetAndListenOnPort(t)
 		defer cleanup()
 
@@ -36,11 +36,11 @@ func TestAgentCmd(t *testing.T) {
 		config.AgentPort = port
 		resetConf := cli.SetConf(config)
 		defer resetConf()
-		
+
 		utils.System.OSExit = func(code int) {}
 		defer utils.ResetSystemFunctions()
 
-		testutils.ExecuteCobraCommand(t, cli.AgentCmd())
+		testutils.ExecuteCobraCommand(t, cli.AgentCmd()) // nolint
 
 		expected := fmt.Sprintf(`\[ERROR\]:-could not listen on port %d:`, port)
 		testutils.AssertLogMessage(t, logfile, expected)

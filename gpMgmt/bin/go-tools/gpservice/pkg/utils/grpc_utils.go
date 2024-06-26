@@ -10,6 +10,8 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
+var newHealthClient = healthpb.NewHealthClient
+
 // CheckGRPCServerHealth checks the health of a gRPC server by sending a health check request.
 // The function retries the health check up to 5 times.
 // If the server is running and responds with a SERVING status, the function returns nil.
@@ -21,12 +23,12 @@ func CheckGRPCServerHealth(conn *grpc.ClientConn) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client := healthpb.NewHealthClient(conn)
+	client := newHealthClient(conn)
 
 	for i := 0; i < 5; i++ {
 		resp, err = client.Check(ctx, &healthpb.HealthCheckRequest{}, grpc.WaitForReady(true))
 		if err != nil {
-			return fmt.Errorf("failed to get grpc server %s health: %s", conn.Target(), FormatGrpcError(err))
+			return fmt.Errorf("failed to get grpc server %s health: %w", conn.Target(), FormatGrpcError(err))
 		}
 
 		if resp.Status == healthpb.HealthCheckResponse_SERVING {
@@ -37,8 +39,18 @@ func CheckGRPCServerHealth(conn *grpc.ClientConn) error {
 		err = fmt.Errorf("grpc server %s not running, status: %s", conn.Target(), resp.Status)
 		gplog.Debug("%s. Retrying", err)
 
-		time.Sleep(1 * time.Second)
+		System.Sleep(1 * time.Second)
 	}
 
 	return err
+}
+
+func SetNewHealthClient(mock healthpb.HealthClient) {
+	newHealthClient = func(cc grpc.ClientConnInterface) healthpb.HealthClient {
+		return mock
+	}
+}
+
+func ResetNewHealthClient() {
+	newHealthClient = healthpb.NewHealthClient
 }

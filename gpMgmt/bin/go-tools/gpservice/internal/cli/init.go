@@ -41,6 +41,16 @@ func InitCmd() *cobra.Command {
 	initCmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize gpservice as a systemd service",
+		Args:  cobra.NoArgs,
+		PreRunE: func(cmd *cobra.Command, args []string) error {
+			if !cmd.Flags().Lookup("no-tls").Changed && !cmd.Flags().Lookup("ca-certificate").Changed &&
+				!cmd.Flags().Lookup("server-certificate").Changed && !cmd.Flags().Lookup("server-key").Changed {
+				return fmt.Errorf("no security options specified. Use either --no-tls for insecure communication or provide " +
+					"the certificates using --ca-certificate, --server-certificate and --server-key for secure communication")
+			}
+
+			return nil
+		},
 		Run: func(cmd *cobra.Command, args []string) {
 			err := RunConfigure(cmd)
 			if err != nil {
@@ -49,25 +59,30 @@ func InitCmd() *cobra.Command {
 		},
 	}
 
-	viper.AutomaticEnv()
-	// TODO: Adding input validation
+	v := viper.New()
+	v.AutomaticEnv()
+
 	initCmd.Flags().IntVar(&agentPort, "agent-port", constants.DefaultAgentPort, `Port on which the agents should listen`)
 	initCmd.Flags().StringVar(&gpHome, "gphome", "/usr/local/greenplum-db", `Path to GPDB installation`)
+	viper.BindPFlag("gphome", initCmd.Flags().Lookup("gphome")) // nolint
 	initCmd.Flags().IntVar(&hubPort, "hub-port", constants.DefaultHubPort, `Port on which the hub should listen`)
-	initCmd.Flags().StringVar(&hubLogDir, "log-dir", greenplum.GetDefaultHubLogDir(), `Path to gp hub log directory`)
+	initCmd.Flags().StringVar(&hubLogDir, "log-dir", greenplum.GetDefaultHubLogDir(), `Path to gpservice log directory`)
 	initCmd.Flags().StringVar(&serviceName, "service-name", constants.DefaultServiceName, `Name for the generated systemd service file`)
-	// TLS credentials are deliberately left blank if not provided, and need to be filled in by the user
 	initCmd.Flags().StringVar(&caCertPath, "ca-certificate", "", `Path to SSL/TLS CA certificate`)
 	initCmd.Flags().StringVar(&serverCertPath, "server-certificate", "", `Path to hub SSL/TLS server certificate`)
 	initCmd.Flags().StringVar(&serverKeyPath, "server-key", "", `Path to hub SSL/TLS server private key`)
-	// Allow passing a hostfile for "real" use cases or a few host names for tests, but not both
 	initCmd.Flags().StringArrayVar(&hostnames, "host", []string{}, `Segment hostname`)
 	initCmd.Flags().StringVar(&hostfilePath, "hostfile", "", `Path to file containing a list of segment hostnames`)
-	initCmd.MarkFlagsMutuallyExclusive("host", "hostfile")
-	initCmd.Flags().BoolVar(&noTlsFlag, "no-tls", false, "set this flag if need to run hub and agents without transport layer security (TLS)")
+	initCmd.Flags().BoolVar(&noTlsFlag, "no-tls", false, "Set this flag if need to run hub and agents without transport layer security (TLS)")
 
-	viper.BindPFlag("gphome", initCmd.Flags().Lookup("gphome")) // nolint
-	gpHome = viper.GetString("gphome")
+	initCmd.MarkFlagsMutuallyExclusive("host", "hostfile")
+	initCmd.MarkFlagsOneRequired("host", "hostfile")
+	initCmd.MarkFlagsMutuallyExclusive("no-tls", "ca-certificate")
+	initCmd.MarkFlagsMutuallyExclusive("no-tls", "server-certificate")
+	initCmd.MarkFlagsMutuallyExclusive("no-tls", "server-key")
+	initCmd.MarkFlagsRequiredTogether("ca-certificate", "server-certificate", "server-key")
+
+	gpHome = v.GetString("gphome")
 
 	return initCmd
 }
@@ -128,28 +143,16 @@ func InitGpService(configFilepath string, hubPort, agentPort int, hostnames []st
 
 func RunConfigure(cmd *cobra.Command) error {
 	if gpHome == "" {
-		return fmt.Errorf("not a valid gpHome found\n")
+		return fmt.Errorf("no value found for gphome, please provide a valid gphome using --gphome or set the GPHOME env variable")
 	}
 
-	if noTlsFlag && (cmd.Flags().Lookup("ca-certificate").Changed ||
-		cmd.Flags().Lookup("server-certificate").Changed ||
-		cmd.Flags().Lookup("server-key").Changed) {
-		return fmt.Errorf("cannot specify --no-tls flag and specify certificates together. Either use --no-tls flag or provide certificates")
-	}
-
-	if !noTlsFlag && (!cmd.Flags().Lookup("ca-certificate").Changed ||
-		!cmd.Flags().Lookup("server-certificate").Changed ||
-		!cmd.Flags().Lookup("server-key").Changed) {
-		return fmt.Errorf("one of the following flags is missing. Please specify --server-key, --server-certificate & --ca-certificate flags")
+	if _, err := os.Stat(gpHome); os.IsNotExist(err) {
+		return fmt.Errorf("gphome path %s does not exist", gpHome)
 	}
 
 	// Regenerate default flag values if a custom GPHOME or username is passed
 	if !cmd.Flags().Lookup("config-file").Changed {
 		configFilepath = filepath.Join(gpHome, constants.ConfigFileName)
-	}
-
-	if !cmd.Flags().Lookup("host").Changed && !cmd.Flags().Lookup("hostfile").Changed {
-		return errors.New("at least one hostname must be provided using either --host or --hostfile")
 	}
 
 	if agentPort == hubPort {
@@ -162,16 +165,11 @@ func RunConfigure(cmd *cobra.Command) error {
 		return err
 	}
 
-	if cmd.Flags().Lookup("hostfile").Changed {
-		hostnames, err = GetHostnames(hostfilePath)
-		if err != nil {
-			return err
-		}
+	hostnames, err := getHostnames()
+	if err != nil {
+		return err
 	}
 
-	if len(hostnames) < 1 {
-		return fmt.Errorf("no host name found, please provide a valid input host name using either --host or --hostfile")
-	}
 
 	err = InitGpService(configFilepath, hubPort, agentPort, hostnames, hubLogDir, serviceName,
 		gpHome, caCertPath, serverCertPath, serverKeyPath, noTlsFlag, false)
@@ -259,11 +257,27 @@ func resolveAbsolutePaths() error {
 	return nil
 }
 
-func GetHostnames(hostFilePath string) ([]string, error) {
-	contents, err := utils.System.ReadFile(hostFilePath)
-	if err != nil {
-		return []string{}, fmt.Errorf("failed to read hostfile %s: %w", hostFilePath, err)
+func getHostnames() ([]string, error) {
+	var result []string
+
+	if len(hostnames) == 0 {
+		contents, err := utils.System.ReadFile(hostfilePath)
+		if err != nil {
+			return []string{}, fmt.Errorf("failed to read hostfile %s: %w", hostfilePath, err)
+		}
+
+		hostnames = strings.Fields(string(contents))
 	}
 
-	return strings.Fields(string(contents)), nil
+	for _, host := range hostnames {
+		if host != "" {
+			result = append(result, host)
+		}
+	}
+
+	if len(result) < 1 {
+		return []string{}, fmt.Errorf("no host name found, please provide a valid input host name using either --host or --hostfile")
+	}
+
+	return result, nil
 }

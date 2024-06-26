@@ -36,13 +36,13 @@ $ gpservice status
 func runStatusCmd() error {
 	var statuses []*idl.ServiceStatus
 
-	hubStatus, err := getHubStatus(conf)
+	hubStatus, err := getHubStatus(serviceConfig)
 	if err != nil {
 		return err
 	}
 	statuses = append(statuses, hubStatus...)
 
-	agentStatus, err := getAgentStatus(conf)
+	agentStatus, err := getAgentStatus(serviceConfig)
 	if err != nil {
 		displayServiceStatus(os.Stdout, statuses)
 		return err

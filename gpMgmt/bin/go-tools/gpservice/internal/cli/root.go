@@ -14,7 +14,7 @@ import (
 
 var (
 	configFilepath string
-	conf           *config.Config
+	serviceConfig  *config.Config
 	verbose        bool
 )
 
@@ -30,15 +30,14 @@ func RootCommand() *cobra.Command {
 				return
 			}
 
-			conf, err = config.Read(configFilepath)
+			serviceConfig, err = config.Read(configFilepath)
 			if err != nil {
 				fmt.Println(err)
 				fmt.Println("If gpservice is not initialized, execute the 'gpservice init' command to initialize them.")
 				os.Exit(1)
 			}
 
-			initializeLogger(cmd, conf.LogDir)
-			return
+			initializeLogger(cmd, serviceConfig.LogDir)
 		}}
 
 	root.PersistentFlags().StringVar(&configFilepath, "config-file", filepath.Join(os.Getenv("GPHOME"), constants.ConfigFileName), `Path to gpservice configuration file`)
@@ -72,10 +71,10 @@ func initializeLogger(cmd *cobra.Command, logdir string) {
 
 // used only for testing
 func SetConf(customConf *config.Config) func() {
-	oldConf := conf
-	conf = customConf
+	oldConf := serviceConfig
+	serviceConfig = customConf
 
 	return func() {
-		conf = oldConf
+		serviceConfig = oldConf
 	}
 }

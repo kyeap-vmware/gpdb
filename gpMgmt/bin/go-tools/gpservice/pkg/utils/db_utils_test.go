@@ -3,9 +3,10 @@ package utils_test
 import (
 	"context"
 	"errors"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/jmoiron/sqlx"
 

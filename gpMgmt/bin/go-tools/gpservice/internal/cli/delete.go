@@ -12,7 +12,7 @@ func DeleteCmd() *cobra.Command {
 		Use:   "delete",
 		Short: "de-register services and cleanup related files",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return DeleteServices(conf, configFilepath)
+			return DeleteServices(serviceConfig, configFilepath)
 		},
 	}
 	return deleteCmd

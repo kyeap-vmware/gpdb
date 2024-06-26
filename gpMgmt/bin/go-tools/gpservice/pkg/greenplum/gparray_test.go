@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/testutils"
 	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/greenplum-db/gpdb/gpservice/testutils"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/greenplum-db/gpdb/gpservice/constants"

@@ -48,11 +48,11 @@ $ gpservice start --agent
 
 func runStartCmd(startHub, startAgent bool) error {
 	if startHub {
-		return startHubService(conf)
+		return startHubService(serviceConfig)
 	} else if startAgent {
-		return startAgentService(conf)
+		return startAgentService(serviceConfig)
 	} else {
-		return StartServices(conf)
+		return StartServices(serviceConfig)
 	}
 }
 

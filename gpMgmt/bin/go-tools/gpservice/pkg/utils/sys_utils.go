@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -37,6 +38,7 @@ type SystemFunctions struct {
 	ReadFile           func(name string) ([]byte, error)
 	GetHostName        func() (name string, err error)
 	OSExit             func(code int)
+	Sleep              func(d time.Duration)
 }
 
 func InitializeSystemFunctions() *SystemFunctions {
@@ -57,6 +59,7 @@ func InitializeSystemFunctions() *SystemFunctions {
 		ReadFile:           os.ReadFile,
 		GetHostName:        os.Hostname,
 		OSExit:             os.Exit,
+		Sleep:              time.Sleep,
 	}
 }
 

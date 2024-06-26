@@ -25,7 +25,7 @@ func HubCmd() *cobra.Command {
 }
 
 func runHubCmd() error {
-	h := hub.New(conf)
+	h := hub.New(serviceConfig)
 	err := h.Start()
 	if err != nil {
 		return err
