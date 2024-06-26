@@ -1413,35 +1413,6 @@ cdbexplain_formatMemory(char *outbuf, int bufsize, double bytes)
 }								/* cdbexplain_formatMemory */
 
 
-
-/*
- * cdbexplain_formatSeconds
- *	  Convert time in seconds to readable string
- *
- *		outbuf:  [output] pointer to a char buffer to be filled
- *		bufsize: [input] maximum number of characters to write to outbuf (must be set by the caller)
- *		seconds: [input] a value representing no. of seconds to be written to outbuf
- */
-static void
-cdbexplain_formatSeconds(char *outbuf, int bufsize, double seconds, bool unit)
-{
-	Assert(outbuf != NULL && "CDBEXPLAIN: char buffer is null");
-	Assert(bufsize > 0 && "CDBEXPLAIN: size of char buffer is zero");
-	double		ms = seconds * 1000.0;
-
-	/* check if truncation occurs */
-#ifdef USE_ASSERT_CHECKING
-	int			nchars_written =
-#endif							/* USE_ASSERT_CHECKING */
-	snprintf(outbuf, bufsize, "%.*f%s",
-			 (ms < 10.0 && ms != 0.0 && ms > -10.0) ? 3 : 0,
-			 ms, (unit ? " ms" : ""));
-
-	Assert(nchars_written < bufsize &&
-		   "CDBEXPLAIN:  size of char buffer is smaller than the required number of chars");
-}								/* cdbexplain_formatSeconds */
-
-
 /*
  * cdbexplain_formatSeg
  *	  Convert segment id to string.
@@ -1563,14 +1534,11 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 	struct CdbExplain_ShowStatCtx *ctx = es->showstatctx;
 	Instrumentation *instr = planstate->instrument;
 	CdbExplain_NodeSummary *ns = instr->cdbNodeSummary;
-	instr_time	timediff;
 	int			i;
 
-	char		totalbuf[50];
 	char		avgbuf[50];
 	char		maxbuf[50];
 	char		segbuf[50];
-	char		startbuf[50];
 
 	/* Might not have received stats from qExecs if they hit errors. */
 	if (!ns)
@@ -1819,7 +1787,7 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 			 */
 			appendStringInfoSpaces(es->str, es->indent * 2);
 			appendStringInfoString(es->str,
-								   "allstat: seg_firststart_total_ntuples");
+								   "seg execution stats: ");
 		}
 		else
 			ExplainOpenGroup("Allstat", "Allstat", true, es);
@@ -1832,41 +1800,34 @@ cdbexplain_showExecStats(struct PlanState *planstate, ExplainState *es)
 				nsi->pstype == T_Invalid)
 				continue;
 
-			/* Time from start of query on qDisp to worker's first result row */
-			INSTR_TIME_SET_ZERO(timediff);
-			INSTR_TIME_ACCUM_DIFF(timediff, nsi->firststart, ctx->querystarttime);
-
+			double	nloops = nsi->nloops;
+			double	startup_ms = 1000.0 * nsi->startup / nloops;
+			double	total_ms = 1000.0 * nsi->total / nloops;
+			double	rows = nsi->ntuples / nloops;
 			if (es->format == EXPLAIN_FORMAT_TEXT)
 			{
-				cdbexplain_formatSeconds(startbuf, sizeof(startbuf),
-										 INSTR_TIME_GET_DOUBLE(timediff), true);
-				cdbexplain_formatSeconds(totalbuf, sizeof(totalbuf),
-										 nsi->total, true);
 				appendStringInfo(es->str,
-								 "/seg%d_%s_%s_%.0f",
+								 "seg%d: (actual time=%.3f..%.3f rows=%.0f loops=%.0f) | ",
 								 ns->segindexes[i],
-								 startbuf,
-								 totalbuf,
-								 nsi->ntuples);
+								 startup_ms,
+								 total_ms,
+								 rows,
+								 nloops);
 			}
 			else
 			{
-				cdbexplain_formatSeconds(startbuf, sizeof(startbuf),
-										 INSTR_TIME_GET_DOUBLE(timediff), false);
-				cdbexplain_formatSeconds(totalbuf, sizeof(totalbuf),
-										 nsi->total, false);
-
 				ExplainOpenGroup("Segment", NULL, false, es);
 				ExplainPropertyInteger("Segment index", NULL, ns->segindexes[i], es);
-				ExplainPropertyText("Time To First Result", startbuf, es);
-				ExplainPropertyText("Time To Total Result", totalbuf, es);
-				ExplainPropertyFloat("Tuples", NULL, nsi->ntuples, 1, es);
+				ExplainPropertyFloat("Time To First Result", NULL, startup_ms, 3, es);
+				ExplainPropertyFloat("Time To Total Result", NULL, total_ms, 3, es);
+				ExplainPropertyFloat("Tuples", NULL, rows, 0, es);
+				ExplainPropertyFloat("Loops", NULL, nloops, 0, es);
 				ExplainCloseGroup("Segment", NULL, false, es);
 			}
 		}
 
 		if (es->format == EXPLAIN_FORMAT_TEXT)
-			appendStringInfoString(es->str, "//end\n");
+			appendStringInfoString(es->str, "\n");
 		else
 			ExplainCloseGroup("Allstat", "Allstat", true, es);
 	}

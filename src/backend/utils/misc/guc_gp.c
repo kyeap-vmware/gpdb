@@ -797,7 +797,7 @@ struct config_bool ConfigureNamesBool_gp[] =
 
 	{
 		{"gp_enable_explain_allstat", PGC_USERSET, CLIENT_CONN_OTHER,
-			gettext_noop("Experimental feature: dump stats for all segments in EXPLAIN ANALYZE."),
+			gettext_noop("Dump stats for all segments in EXPLAIN ANALYZE."),
 			NULL,
 			GUC_NO_SHOW_ALL | GUC_NOT_IN_SAMPLE
 		},
