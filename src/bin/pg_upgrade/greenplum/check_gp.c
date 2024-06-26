@@ -35,6 +35,7 @@ static void check_for_ao_matview_with_relfrozenxid(ClusterInfo *cluster);
 static void check_views_with_changed_function_signatures(void);
 static void check_views_with_removed_columns(void);
 static void check_views_with_removed_tables(void);
+static void check_databases_and_roles_with_removed_gucs_set(void);
 
 /*
  *	check_greenplum
@@ -63,6 +64,7 @@ check_greenplum(void)
 	check_views_with_removed_columns();
 	check_for_ao_matview_with_relfrozenxid(&old_cluster);
 	check_views_with_removed_tables();
+	check_databases_and_roles_with_removed_gucs_set();
 }
 
 /*
@@ -1533,6 +1535,161 @@ check_views_with_removed_tables()
 			"| These views must be updated to use tables supported in the\n"
 			"| target version or removed before upgrade can continue. A list\n"
 			"| of the problem views is in the file:\n\t%s\n\n", output_path);
+	}
+	else
+		check_ok();
+}
+
+static void
+check_databases_and_roles_with_removed_gucs_set(void)
+{
+	if (GET_MAJOR_VERSION(old_cluster.major_version) > 904)
+		return;
+
+	char		output_path[MAXPGPATH];
+	FILE	   *script = NULL;
+	int			i_datname;
+	int			i_rolname;
+	int			i_guc;
+	PGresult   *res;
+	int			ntups;
+	int			rowno;
+	bool		header_printed = false;
+	PGconn	   *conn = connectToServer(&old_cluster, "template1");
+
+	prep_status("Checking for databases and roles with removed GUCs set");
+
+	snprintf(output_path, sizeof(output_path),  "%s/%s",
+			 log_opts.basedir, "databases_and_roles_with_removed_gucs_set.txt");
+
+	res = executeQueryOrDie(conn,
+							"WITH set_gucs AS ("
+							"  SELECT d.datname, r.rolname, split_part(unnest(s.setconfig),'=',1) AS guc "
+							"  FROM pg_db_role_setting s "
+							"  LEFT JOIN pg_database d ON s.setdatabase = d.oid "
+							"  LEFT JOIN pg_roles r ON s.setrole = r.oid "
+							")"
+							"SELECT * FROM set_gucs "
+							"WHERE guc IN ("
+							"  'autocommit',"
+							"  'checkpoint_segments',"
+							"  'debug_latch',"
+							"  'dev_opt_unsafe_truncate_in_subtransaction',"
+							"  'dml_ignore_target_partition_check',"
+							"  'dtx_phase2_retry_count',"
+							"  'enable_implicit_timeformat_YYYYMMDDHH24MISS',"
+							"  'gp_add_column_inherits_table_setting',"
+							"  'gp_allow_rename_relation_without_lock',"
+							"  'gp_count_host_segments_using_address',"
+							"  'gp_distinct_grouping_sets_threshold',"
+							"  'gp_eager_agg_distinct_pruning',"
+							"  'gp_eager_one_phase_agg',"
+							"  'gp_eager_preunique',"
+							"  'gp_enable_exchange_default_partition',"
+							"  'gp_enable_gpperfmon',"
+							"  'gp_enable_groupext_distinct_gather',"
+							"  'gp_enable_groupext_distinct_pruning',"
+							"  'gp_enable_mdqa_shared_scan',"
+							"  'gp_enable_mk_sort',"
+							"  'gp_enable_motion_mk_sort',"
+							"  'gp_enable_sort_distinct',"
+							"  'gp_gang_creation_retry_non_recovery',"
+							"  'gp_gpperfmon_send_interval',"
+							"  'gp_hashagg_default_nbatches',"
+							"  'gp_hashagg_groups_per_bucket',"
+							"  'gp_hashagg_streambottom',"
+							"  'gp_ignore_window_exclude',"
+							"  'gp_indexcheck_vacuum',"
+							"  'gp_keep_all_xlog',"
+							"  'gp_keep_partition_children_locks',"
+							"  'gp_log_resqueue_priority_sleep_time',"
+							"  'gp_mk_sort_check',"
+							"  'gp_partitioning_dynamic_selection_log',"
+							"  'gpperfmon_log_alert_level',"
+							"  'gpperfmon_port',"
+							"  'gp_perfmon_print_packet_info',"
+							"  'gp_perfmon_segment_interval',"
+							"  'gp_resgroup_print_operator_memory_limits',"
+							"  'gp_resource_group_cpu_ceiling_enforcement',"
+							"  'gp_resource_group_enable_recalculate_query_mem',"
+							"  'gp_resource_group_memory_limit',"
+							"  'gp_safefswritesize',"
+							"  'gp_sort_flags',"
+							"  'gp_sort_max_distinct',"
+							"  'gp_use_synchronize_seqscans_catalog_vacuum_full',"
+							"  'max_appendonly_tables',"
+							"  'memory_spill_ratio',"
+							"  'optimizer_analyze_enable_merge_of_leaf_stats',"
+							"  'optimizer_enable_dml_triggers',"
+							"  'optimizer_enable_partial_index',"
+							"  'optimizer_prune_unused_columns',"
+							"  'password_hash_algorithm',"
+							"  'sql_inheritance',"
+							"  'test_print_prefetch_joinqual',"
+							"  'wal_keep_segments')"
+							"ORDER BY 1,2,3");
+
+	ntups = PQntuples(res);
+	i_datname = PQfnumber(res, "datname");
+	i_rolname = PQfnumber(res, "rolname");
+	i_guc = PQfnumber(res, "guc");
+
+	/* Output removed GUCs set at database level */
+	for (rowno = 0; rowno < ntups; rowno++)
+	{
+		if (strcmp(PQgetvalue(res, rowno, i_datname), "") == 0)
+			continue;
+
+		if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+			pg_fatal("Could not create necessary file:  %s\n", output_path);
+
+		/* Print header first and then list of removed GUCs on following lines */
+		if (!header_printed)
+		{
+			fprintf(script, "Database, Removed GUC :\n");
+			header_printed = true;
+		}
+		fprintf(script, "  %s, %s\n",
+				PQgetvalue(res, rowno, i_datname),
+				PQgetvalue(res, rowno, i_guc));
+	}
+
+	/* space between database and role GUCS */
+	if (header_printed)
+		fprintf(script, "\n");
+
+	/* Output removed GUCs set at role level */
+	header_printed = false;
+	for (rowno = 0; rowno < ntups; rowno++)
+	{
+		if (strcmp(PQgetvalue(res, rowno, i_rolname), "") == 0)
+			continue;
+
+		if (script == NULL && (script = fopen(output_path, "w")) == NULL)
+			pg_fatal("Could not create necessary file:  %s\n", output_path);
+		if (!header_printed)
+		{
+			fprintf(script, "Role, Removed GUC :\n");
+			header_printed = true;
+		}
+		fprintf(script, "  %s, %s\n",
+				PQgetvalue(res, rowno, i_rolname),
+				PQgetvalue(res, rowno, i_guc));
+	}
+	PQclear(res);
+	PQfinish(conn);
+
+	if (script)
+	{
+		fclose(script);
+		pg_log(PG_REPORT, "fatal\n");
+		gp_fatal_log(
+			"| Your installation contains database or role level GUCs\n"
+			"| that no longer exist in the target cluster. Reset the database\n"
+			"| or role level GUCs before running the upgrade. Please refer to\n"
+			"| the documentation for a complete list of removed GUCs.\n"
+			"| A list of such GUCs is in the file:\n"
+			"| \t%s\n\n", output_path);
 	}
 	else
 		check_ok();
