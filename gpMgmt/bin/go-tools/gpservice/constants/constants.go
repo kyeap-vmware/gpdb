@@ -33,6 +33,8 @@ const (
 	DefaultSegName          = "gpseg"
 	UserInputWaitDurtion    = 30
 	CheckInterruptFrequency = 500 * time.Millisecond
+	LockDirPath             = "/tmp"
+	LockDirPidFile          = "pid"
 )
 
 // gp_segment_configuration specific constants

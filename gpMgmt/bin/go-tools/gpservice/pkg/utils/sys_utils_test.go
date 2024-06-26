@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/greenplum-db/gpdb/gpservice/testutils"
+	"golang.org/x/exp/rand"
 
 	"github.com/greenplum-db/gp-common-go-libs/testhelper"
 	"github.com/greenplum-db/gpdb/gpservice/pkg/utils"
@@ -437,6 +438,32 @@ func TestRemoveDirContents(t *testing.T) {
 			t.Fatalf("unexpected err: %v", err)
 		}
 
+	})
+
+}
+
+func TestCheckPid(t *testing.T) {
+	t.Run("checkpid returns true", func(t *testing.T) {
+		_, _, logfile := testhelper.SetupTestLogger()
+		pid := os.Getpid()
+		check := utils.CheckPid(pid)
+
+		if check == false {
+			t.Fatalf("Unexpected error, pid should be running")
+		}
+
+		expectedErr := fmt.Sprintf("Process %d is already running!", pid)
+		testutils.AssertLogMessage(t, logfile, expectedErr)
+	})
+
+	t.Run("Checkpid failure case", func(t *testing.T) {
+
+		pid := rand.Int()
+		check := utils.CheckPid(pid)
+
+		if check == true {
+			t.Fatalf("Unexpected error, pid should not be running")
+		}
 	})
 
 }

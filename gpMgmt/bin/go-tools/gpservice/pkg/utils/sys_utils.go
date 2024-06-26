@@ -3,6 +3,7 @@ package utils
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -13,7 +14,11 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+
 	"time"
+
+	"github.com/greenplum-db/gp-common-go-libs/gplog"
 )
 
 var (
@@ -295,4 +300,15 @@ func RemoveDirContents(dir string) error {
 		}
 	}
 	return nil
+}
+
+func CheckPid(pid int) bool {
+
+	proc, _ := os.FindProcess(int(pid))
+	if !errors.Is(proc.Signal(syscall.Signal(0)), os.ErrProcessDone) {
+		gplog.Debug("Process %d is already running!\n", proc.Pid)
+		return true
+	}
+	return false
+
 }

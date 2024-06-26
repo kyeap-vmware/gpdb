@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/greenplum-db/gpdb/gpservice/pkg/greenplum"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/greenplum-db/gpdb/gpservice/pkg/greenplum"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -193,6 +194,18 @@ func RunInitClusterCmd(cmd *cobra.Command, args []string) error {
 				return
 			}
 		}
+	}()
+
+	lockDir, err := utils.NewLockDir(cmd)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := lockDir.Remove()
+		if err != nil {
+			gplog.Error("failed to remove lock directory err %v", err)
+		}
+
 	}()
 
 	err = InitClusterService(args[0], ctx, ctrl, cliForceFlag, verbose)
