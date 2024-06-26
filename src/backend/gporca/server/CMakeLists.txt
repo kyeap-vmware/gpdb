@@ -426,7 +426,11 @@ CForeignPartTest:
 ForeignPartUniform PartForeignMixed PartForeignDifferentServer PartForeignDifferentExecLocation PartForeignMixedDPE PartForeignMixedSPE PartForeignUniformSPE ForeignScanExecLocAnySimpleScan ForeignScanExecLocAnyJoin ForeignPartOneTimeFilterDPE;
 
 CCardinalityTest:
-SystemColCtidStats SystemColSegIdStats
+SystemColCtidStats SystemColSegIdStats;
+
+CRandomlyDistributedDPETest:
+DPv2PSWithRandomTables
+
 ")
 
 set(mdp_dir "../data/dxl/minidump/")

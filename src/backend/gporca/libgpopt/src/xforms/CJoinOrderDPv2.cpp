@@ -868,8 +868,8 @@ CJoinOrderDPv2::PopulateDPEInfo(SExpressionInfo *join_expr_info,
 	SGroupInfo *pt_atom = nullptr;
 	// iterate through each atom of the "outer" (left) group, and look for a partition table
 	// that does not yet have a partition selector.
-	// Once a partition table is found, check if it has a valid partition selector. I
-	// if no valid partition selectors are found, continue to the next partition table.
+	// Once a partition table is found, check if it has a valid partition selector.
+	// If no valid partition selectors are found, continue to the next partition table.
 	while (iter_pt.Advance())
 	{
 		pt_atom = (*atom_groups)[iter_pt.Bit()];
@@ -884,7 +884,7 @@ CJoinOrderDPv2::PopulateDPEInfo(SExpressionInfo *join_expr_info,
 			continue;
 		}
 
-		// check if this join order will produce a valid partition selector
+		// check if this join order will produce a valid partition selector.
 		// this can only occur if the distribution spec matches.
 		// consider the below join tree:
 		//       HJ3
@@ -920,11 +920,16 @@ CJoinOrderDPv2::PopulateDPEInfo(SExpressionInfo *join_expr_info,
 				CColRefSet *pt_atom_distribution_cols = CLogical::PcrsDist(
 					m_mp, atom_table_descriptor, atomOutputColArray);
 				atomOutputColArray->Release();
-				// check that the child join condition contains the partition table's distribution columns
-				// if it doesn't, it won't be a valid partition selector due to the added redistribute
-				if (!left_child_join_condition_cols->ContainsAll(
+				// Check that the child join condition contains the partition table's distribution columns.
+				// If it doesn't, it won't be a valid partition selector due to the added redistribute.
+				// If the partition table is randomly distributed, join conditition cannot contain distribution
+				// columns and this won't be a valid partition selector alternative
+				if (IMDRelation::EreldistrRandom ==
+						atom_table_descriptor->GetRelDistribution() ||
+					!left_child_join_condition_cols->ContainsAll(
 						pt_atom_distribution_cols))
 				{
+					// not a valid alternative, keep looking
 					pt_atom_distribution_cols->Release();
 					continue;
 				}
