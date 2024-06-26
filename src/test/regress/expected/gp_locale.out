@@ -87,4 +87,10 @@ SELECT * FROM hi_안녕세계 hi_안녕세계1, hi_안녕세계 hi_안녕세계2
  1 | 안녕세계1 first UPDATE | 안녕세2 first | 안녕세계3 first      | 1 | 안녕세계1 first UPDATE | 안녕세2 first | 안녕세계3 first
 (1 row)
 
+SELECT t1.안녕세계1 AS "안녕", t2.안녕세계1 AS "세계" FROM hi_안녕세계 t1 LEFT JOIN hi_안녕세계 t2 ON t1.안녕세계1=t2.안녕세계1;
+          안녕          |          세계          
+------------------------+------------------------
+ 안녕세계1 first UPDATE | 안녕세계1 first UPDATE
+(1 row)
+
 RESET optimizer_trace_fallback;

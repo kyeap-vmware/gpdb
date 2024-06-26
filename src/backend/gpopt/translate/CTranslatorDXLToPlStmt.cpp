@@ -5598,6 +5598,9 @@ CTranslatorDXLToPlStmt::TranslateDXLProjectListToHashTargetList(
 			gpdb::MakeTargetEntry((Expr *) var, (AttrNumber)(ul + 1), resname,
 								  false	 // resjunk
 			);
+		target_entry->ressortgroupref = te_child->ressortgroupref;
+		target_entry->resorigtbl = te_child->resorigtbl;
+		target_entry->resorigcol = te_child->resorigcol;
 
 		target_list = gpdb::LAppend(target_list, target_entry);
 		output_context->InsertMapping(sc_proj_elem_dxlop->Id(), target_entry);

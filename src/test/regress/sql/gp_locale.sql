@@ -58,4 +58,6 @@ WITH cte(안녕세계x, こんにちわx) AS
 -- JOIN
 SELECT * FROM hi_안녕세계 hi_안녕세계1, hi_안녕세계 hi_안녕세계2 WHERE hi_안녕세계1.안녕세계1 LIKE '%UPDATE';
 
+SELECT t1.안녕세계1 AS "안녕", t2.안녕세계1 AS "세계" FROM hi_안녕세계 t1 LEFT JOIN hi_안녕세계 t2 ON t1.안녕세계1=t2.안녕세계1;
+
 RESET optimizer_trace_fallback;
