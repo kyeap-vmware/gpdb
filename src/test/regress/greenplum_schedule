@@ -165,9 +165,11 @@ test: bfv_partition_plans
 # to race-condition fetching relallvisible.
 test: gp_covering_index
 test: planhints rowhints joinhints
-test: qp_indexscan
+test: qp_indexscan gpsd
 test: gp_index_costing
 test: pgstat_qd_tabstat
+# Run minirepro separately to avoid concurrent deletes erroring out the internal pg_dump call
+test: minirepro
 # dispatch should always run seperately from other cases.
 test: dispatch
 # autoanalyze and autovacuum affects the analyze/vacuum related views in the sysviews_gp test
@@ -184,9 +186,7 @@ test: trig auth_constraint role portals_updatable plpgsql_cache timeseries pg_st
 test: direct_dispatch bfv_dd bfv_dd_multicolumn bfv_dd_types
 test: interrupt_holdoff_count
 
-test: bfv_catalog bfv_index bfv_olap bfv_aggregate DML_over_joins bfv_statistic nested_case_null sort bb_mpph aggregate_with_groupingsets gporca gpsd catcache part_external_table
-# Run minirepro separately to avoid concurrent deletes erroring out the internal pg_dump call
-test: minirepro
+test: bfv_catalog bfv_index bfv_olap bfv_aggregate DML_over_joins bfv_statistic nested_case_null sort bb_mpph aggregate_with_groupingsets gporca catcache part_external_table
 
 # NOTE: gporca_faults uses gp_fault_injector - so do not add to a parallel group
 test: gporca_faults
