@@ -1621,6 +1621,7 @@ check_databases_and_roles_with_removed_gucs_set(void)
 							"  'memory_spill_ratio',"
 							"  'optimizer_analyze_enable_merge_of_leaf_stats',"
 							"  'optimizer_enable_dml_triggers',"
+							"  'optimizer_enable_fullhashjoin',"
 							"  'optimizer_enable_partial_index',"
 							"  'optimizer_prune_unused_columns',"
 							"  'password_hash_algorithm',"
