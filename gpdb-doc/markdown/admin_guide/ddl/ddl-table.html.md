@@ -18,7 +18,7 @@ The `CREATE TABLE` command creates a table and defines its structure. When you c
 
 The data type of a column determines the types of data values the column can contain. Choose the data type that uses the least possible space but can still accommodate your data and that best constrains the data. For example, use character data types for strings, date or timestamp data types for dates, and numeric data types for numbers.
 
-For table columns that contain textual data, specify the data type `VARCHAR` or `TEXT`. Specifying the data type `CHAR` is not recommended. In Greenplum Database, the data types `VARCHAR` or `TEXT` handle padding added to the data \(space characters added after the last non-space character\) as significant characters, the data type `CHAR` does not. For information on the character data types, see the `CREATE TABLE` command in the *Greenplum Database Reference Guide*.
+For table columns that contain textual data, specify the data type `VARCHAR` or `TEXT`. Specifying the data type `CHAR` is not recommended. In Greenplum Database, the data types `VARCHAR` or `TEXT` handle padding added to the data \(space characters added after the last non-space character\) as significant characters, the data type `CHAR` does not. For information on the character data types, see [CREATE TABLE](../../ref_guide/sql_commands/CREATE_TABLE.html).
 
 Use the smallest numeric data type that will accommodate your numeric data and allow for future expansion. For example, using `BIGINT` for data that fits in `INT` or `SMALLINT` wastes storage space. If you expect that your data values will expand over time, consider that changing from a smaller datatype to a larger datatype after loading large amounts of data is costly. For example, if your current data values fit in a `SMALLINT` but it is likely that the values will expand, `INT` is the better long-term choice.
 
@@ -285,4 +285,3 @@ EXPLAIN (COSTS OFF) SELECT a, b FROM atab, btab WHERE a |=| b;
  Optimizer: Postgres-based planner
 (7 rows)
 ```
-
